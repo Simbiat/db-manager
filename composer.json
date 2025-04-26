@@ -1,0 +1,38 @@
+{
+    "name": "simbiat/db-manager",
+    "type": "library",
+    "keywords": [
+        "database",
+        "php",
+        "pdo",
+        "manager"
+    ],
+    "description": "Functions to help with database management.",
+    "homepage": "https://github.com/Simbiat/db-manager",
+    "license": "AGPL-3.0-or-later",
+    "authors": [
+        {
+            "name": "Dmitrii Kustov",
+            "email": "support@simbiat.dev",
+            "homepage": "https://www.simbiat.dev",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.4",
+        "ext-pdo": "*",
+        "simbiat/db-query": "^1"
+    },
+    "suggest": {
+        "simbiat/db-pool": "Allows use of database connections pool"
+    },
+    "autoload": {
+        "psr-4": {
+            "Simbiat\\Database\\": "src/"
+        }
+    },
+    "support": {
+        "issues": "https://github.com/Simbiat/db-manager/issues",
+        "source": "https://github.com/Simbiat/db-manager"
+    }
+}
