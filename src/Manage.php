@@ -72,7 +72,7 @@ class Manage
             ];
         }
         try {
-            return Select::count($query, $bindings);
+            return Query::query($query, $bindings, return: 'count');
         } catch (\Throwable $e) {
             throw new \RuntimeException('Failed to check if table exists with `'.$e->getMessage().'`', 0, $e);
         }
@@ -104,7 +104,7 @@ class Manage
             ];
         }
         try {
-            return Select::selectValue($query, $bindings);
+            return Query::query($query, $bindings, return: 'value');
         } catch (\Throwable $e) {
             throw new \RuntimeException('Failed to check if table exists with `'.$e->getMessage().'`', 0, $e);
         }
@@ -136,7 +136,7 @@ class Manage
             ];
         }
         try {
-            return Select::selectValue($query, $bindings);
+            return Query::query($query, $bindings, return: 'value');
         } catch (\Throwable $e) {
             throw new \RuntimeException('Failed to check if table exists with `'.$e->getMessage().'`', 0, $e);
         }
@@ -168,7 +168,7 @@ class Manage
             ];
         }
         try {
-            $result = Select::selectValue($query, $bindings);
+            $result = Query::query($query, $bindings, return: 'value');
             return preg_match('/^YES$/ui', $result) === 1;
         } catch (\Throwable $e) {
             throw new \RuntimeException('Failed to check if table exists with `'.$e->getMessage().'`', 0, $e);
@@ -201,7 +201,7 @@ class Manage
             ];
         }
         try {
-            return Select::check($query, $bindings);
+            return Query::query($query, $bindings, return: 'check');
         } catch (\Throwable $e) {
             throw new \RuntimeException('Failed to check if table exists with `'.$e->getMessage().'`', 0, $e);
         }
@@ -227,7 +227,7 @@ class Manage
             $bindings = [':table' => $table, ':column' => $column, ':schema' => $schema];
         }
         try {
-            return Select::check($query, $bindings);
+            return Query::query($query, $bindings, return: 'check');
         } catch (\Throwable $e) {
             throw new \RuntimeException('Failed to check if column exists with `'.$e->getMessage().'`', 0, $e);
         }
@@ -249,7 +249,7 @@ class Manage
         #This is the list of the same tables, but where every element is a string of format `schema`.`table`. Used for array search only
         $tablesNamesOnly = [];
         #Get all tables except standard system ones and also order them by size
-        $tablesRaw = Select::selectAll('SELECT `TABLE_SCHEMA` as `schema`, `TABLE_NAME` as `table`'.($bySize ? ', (DATA_LENGTH+INDEX_LENGTH) as `size`' : '').' FROM `INFORMATION_SCHEMA`.`TABLES WHERE` `TABLE_SCHEMA` NOT IN (\'information_schema\', \'performance_schema\', \'mysql\', \'sys\', \'test\')'.(empty($schema) ? '' : ' AND `TABLE_SCHEMA`=:schema').' ORDER BY '.($bySize ? '(DATA_LENGTH+INDEX_LENGTH), ' : '').'`TABLE_SCHEMA`, `TABLE_NAME`;', (empty($schema) ? [] : [':schema' => [$schema, 'string']]));
+        $tablesRaw = Query::query('SELECT `TABLE_SCHEMA` as `schema`, `TABLE_NAME` as `table`'.($bySize ? ', (DATA_LENGTH+INDEX_LENGTH) as `size`' : '').' FROM `INFORMATION_SCHEMA`.`TABLES` WHERE `TABLE_SCHEMA` NOT IN (\'information_schema\', \'performance_schema\', \'mysql\', \'sys\', \'test\')'.(empty($schema) ? '' : ' AND `TABLE_SCHEMA`=:schema').' ORDER BY '.($bySize ? '(DATA_LENGTH+INDEX_LENGTH), ' : '').'`TABLE_SCHEMA`, `TABLE_NAME`;', (empty($schema) ? [] : [':schema' => [$schema, 'string']]), return: 'all');
         #Get dependencies for each table
         foreach ($tablesRaw as $key => $table) {
             $table['dependencies'] = self::selectAllDependencies($table['schema'], $table['table']);
@@ -306,7 +306,7 @@ class Manage
         #Unfortunately, I was not able to make things work with just 1 query with a recursive sub-query, so doing things in 2 steps.
         #The first step is to get all tables that have FKs but exclude those that refer themselves
         if ($tables === null) {
-            $tables = Select::selectAll('SELECT `TABLE_SCHEMA` AS `schema`, `TABLE_NAME` AS `table` FROM `information_schema`.`KEY_COLUMN_USAGE` WHERE `REFERENCED_TABLE_SCHEMA` IS NOT NULL AND CONCAT(`REFERENCED_TABLE_SCHEMA`, \'.\', `REFERENCED_TABLE_NAME`) != CONCAT(`TABLE_SCHEMA`, \'.\', `TABLE_NAME`) GROUP BY `TABLE_SCHEMA`, `TABLE_NAME`;');
+            $tables = Query::query('SELECT `TABLE_SCHEMA` AS `schema`, `TABLE_NAME` AS `table` FROM `information_schema`.`KEY_COLUMN_USAGE` WHERE `REFERENCED_TABLE_SCHEMA` IS NOT NULL AND CONCAT(`REFERENCED_TABLE_SCHEMA`, \'.\', `REFERENCED_TABLE_NAME`) != CONCAT(`TABLE_SCHEMA`, \'.\', `TABLE_NAME`) GROUP BY `TABLE_SCHEMA`, `TABLE_NAME`;', return: 'all');
         }
         foreach ($tables as $key => $table) {
             #For each table get their recursive list of dependencies, if not set in the prepared array
@@ -337,7 +337,7 @@ class Manage
     public static function selectAllDependencies(string $schema, string $table): array
     {
         #We are using backticks when comparing the schemas and tables, since that will definitely avoid any matches due to dots in names
-        return Select::selectColumn(/** @lang SQL */ '
+        return Query::query(/** @lang SQL */ '
                  WITH RECURSIVE `DependencyTree` AS (
                     SELECT
                         CONCAT(\'`\', `REFERENCED_TABLE_SCHEMA`, \'`.`\', `REFERENCED_TABLE_NAME`, \'`\') AS `dependency`
@@ -361,7 +361,7 @@ class Manage
                 )
                 SELECT DISTINCT `dependency`
                     FROM `DependencyTree`;',
-            [':schema' => $schema, ':table' => $table]
+            [':schema' => $schema, ':table' => $table], return: 'column'
         );
     }
     
@@ -382,13 +382,13 @@ class Manage
     public static function showCreateTable(string $schema, string $table, bool $noIncrement = true, bool $ifNotExist = false, bool $addUse = false): ?string
     {
         #Get the original create function
-        $create = Select::selectValue('SHOW CREATE TABLE `'.$schema.'`.`'.$table.'`;', [], 1);
+        $create = Query::query('SHOW CREATE TABLE `'.$schema.'`.`'.$table.'`;', fetch_argument: 1, return: 'value');
         #Add semicolon for consistency
         if (!str_ends_with(';', $create)) {
             $create .= ';';
         }
         #Get current ROW_FORMAT value
-        $rowFormat = Select::selectValue('SELECT `ROW_FORMAT` FROM `information_schema`.`TABLES` WHERE `TABLE_SCHEMA`=:schema AND `TABLE_NAME`=:table;', [':schema' => $schema, ':table' => $table]);
+        $rowFormat = Query::query('SELECT `ROW_FORMAT` FROM `information_schema`.`TABLES` WHERE `TABLE_SCHEMA`=:schema AND `TABLE_NAME`=:table;', [':schema' => $schema, ':table' => $table], return: 'value');
         #Check the value against create statement
         if (preg_match('/ROW_FORMAT='.$rowFormat.'/ui', $create) !== 1) {
             #Value differs or missing
