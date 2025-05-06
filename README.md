@@ -151,8 +151,6 @@ array(2) {
         #Number of violations found
         ["count"]=>
         int(1)
-        ["fixed"]=>
-        int(1)
     }
     ["test__single_constraint"]=>
     array(9) {
@@ -180,8 +178,6 @@ array(2) {
         string(305) "DELETE FROM `simbiatr_simbiat`.`test__child` WHERE (`parentid`) IN (SELECT `child`.`parentid` FROM `simbiatr_simbiat`.`test__child` AS `child` LEFT JOIN `simbiatr_simbiat`.`test__parent` AS `parent` ON `child`.`parentid` <=> `parent`.`id` WHERE (`child`.`parentid` IS NOT NULL) AND `parent`.`id` IS NULL);"
         ["count"]=>
         int(1)
-        ["fixed"]=>
-        int(1)
     }
 }
 ```
@@ -196,3 +192,5 @@ Fix constraints' violations found by `hasFKViolated`. While `schema` and `table`
 Also has two other options governing how violations will be fixed:
 - `nullableOnly` - Whether to get only nullable constraints. If set to `false` entries that are not nullable will be **REMOVED** (`DELETE` will be used, so use with caution). If set to `true` (default), only nullable constraints will be picked up violations will be updated by settings the values to `NULL`.
 - `forceDelete` - Whether to use `DELETE` even for nullable constraints. Use with caution.
+
+Returns array similar to `hasFKViolated`, but with extra key `fixed` which represents number of rows that were updated/deleted as part of the fix.
