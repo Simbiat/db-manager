@@ -412,4 +412,109 @@ class Manage
         #Return result
         return $create;
     }
+    
+    /**
+     * Check if there are any `FOREIGN KEY` constraint violations in the database. While `schema` and `table` are optional, it's recommended to pass them in case there are large tables in the database.
+     *
+     * @param string|null $schema       Optional schema name.
+     * @param string|null $table        Optional table name.
+     * @param bool        $nullableOnly Whether to return only nullable constraints. Practically required only for `fixFKViolations` or similar automations.
+     *
+     * @return array
+     */
+    public static function hasFKViolated(?string $schema = null, ?string $table = null, bool $nullableOnly = false): array
+    {
+        #Get Foreign Key constraints for the table
+        
+        $foreignKeys = Query::query('SELECT
+                                                `tc`.`CONSTRAINT_NAME` as `name`,
+                                                CONCAT(\'`\', `tc`.`TABLE_SCHEMA`, \'`.`\', `tc`.`TABLE_NAME`, \'`\') AS `child_table`,
+                                                `kcu`.`COLUMN_NAME` AS `child_column`,
+                                                CONCAT(\'`\', `kcu`.`REFERENCED_TABLE_SCHEMA`, \'`.`\', `kcu`.`REFERENCED_TABLE_NAME`, \'`\') AS `parent_table`,
+                                                `kcu`.`REFERENCED_COLUMN_NAME` AS `parent_column`,
+                                                `ref`.`DELETE_RULE` AS `on_delete`
+                                            FROM
+                                                `information_schema`.`TABLE_CONSTRAINTS` AS `tc`
+                                                JOIN `information_schema`.`KEY_COLUMN_USAGE` AS `kcu`
+                                                ON `tc`.`CONSTRAINT_NAME` = `kcu`.`CONSTRAINT_NAME`
+                                                AND `tc`.`TABLE_SCHEMA` = `kcu`.`TABLE_SCHEMA`
+                                                JOIN `information_schema`.`REFERENTIAL_CONSTRAINTS` as `ref`
+                                                ON `tc`.`CONSTRAINT_NAME` = `ref`.`CONSTRAINT_NAME`
+                                                AND `tc`.`TABLE_SCHEMA` = `ref`.`CONSTRAINT_SCHEMA`
+                                            WHERE
+                                                `tc`.`CONSTRAINT_TYPE` = \'FOREIGN KEY\''.
+            #Space after named identifiers is important here, or the query can fail
+            (empty($schema) ? '' : 'AND `tc`.`TABLE_SCHEMA` = :schema ').
+            (empty($table) ? '' : 'AND `tc`.`TABLE_NAME` = :table ').
+            ($nullableOnly ? ' AND `ref`.`DELETE_RULE`=\'SET NULL\' ' : '').
+            'ORDER BY `tc`.`CONSTRAINT_NAME`, `kcu`.`ORDINAL_POSITION`;',
+            [':schema' => $schema, ':table' => $table], return: 'all');
+        #Group by constraint to handle multi-column constraints
+        $constraints = [];
+        foreach ($foreignKeys as $constraint) {
+            $constraints[$constraint['name']]['child_table'] = $constraint['child_table'];
+            $constraints[$constraint['name']]['parent_table'] = $constraint['parent_table'];
+            $constraints[$constraint['name']]['on_delete'] = $constraint['on_delete'];
+            $constraints[$constraint['name']]['columns'][] = [
+                'child' => $constraint['child_column'],
+                'parent' => $constraint['parent_column']
+            ];
+        }
+        foreach ($constraints as $name => &$fk) {
+            #Build column list, JOIN and WHERE conditions
+            $children = [];
+            $joinConditions = [];
+            $whereConditions = [];
+            $forUpdate = [];
+            foreach ($fk['columns'] as $col) {
+                $children[] = '`child`.`'.$col['child'].'`';
+                $joinConditions[] = '`child`.`'.$col['child'].'` <=> `parent`.`'.$col['parent'].'`';
+                $whereConditions[] = '`child`.`'.$col['child'].'` IS NOT NULL';
+                $forUpdate[] = '`'.$col['child'].'`=NULL';
+            }
+            $columnList = implode(', ', $children);
+            $onClause = implode(' AND ', $joinConditions);
+            $whereClause = implode(' OR ', $whereConditions);
+            #Generate the query to get values of violating rows. Can be useful for further processing
+            $fk['select'] = /** @lang SQL */
+                'SELECT '.$columnList.' FROM '.$fk['child_table'].' AS `child` LEFT JOIN '.$fk['parent_table'].' AS `parent` ON '.$onClause.' WHERE ('.$whereClause.') AND `parent`.`'.$fk['columns'][0]['parent'].'` IS NULL;';
+            #Generate the queries to fix the violations
+            $fk['update'] = /** @lang SQL */
+                preg_replace('/;\)$/u', ');', 'UPDATE '.$fk['child_table'].' SET '.implode(', ', $forUpdate).' WHERE ('.str_replace('`child`.', '', $columnList).') IN ('.$fk['select'].')');
+            $fk['delete'] = preg_replace('/;\)$/u', ');', 'DELETE FROM '.$fk['child_table'].' WHERE ('.str_replace('`child`.', '', $columnList).') IN ('.$fk['select'].')');
+            #Get the count of violating rows
+            $fk['count'] = Query::query('SELECT COUNT(*) AS `count` FROM '.$fk['child_table'].' AS `child` LEFT JOIN '.$fk['parent_table'].' AS `parent` ON '.$onClause.' WHERE ('.$whereClause.') AND `parent`.`'.$fk['columns'][0]['parent'].'` IS NULL;', return: 'count');
+            if ($fk['count'] === 0) {
+                unset($constraints[$name]);
+            }
+        }
+        unset($fk);
+        return $constraints;
+    }
+    
+    /**
+     * Fix found constraints' violations. While `schema` and `table` are optional, it's recommended to pass them in case there are large tables in the database.
+     *
+     * @param string|null $schema       Optional schema name.
+     * @param string|null $table        Optional table name.
+     * @param bool        $nullableOnly Whether to get only nullable constraints. If set to `false` entries that are not nullable will be **REMOVED** (`DELETE` will be used, so use with caution). If set to `true` (default), only nullable constraints will be picked up violations will be updated by settings the values to `NULL`.
+     * @param bool        $forceDelete  Whether to use `DELETE` even for nullable constraints. Use with caution.
+     *
+     * @return array
+     */
+    public static function fixFKViolations(?string $schema = null, ?string $table = null, bool $nullableOnly = true, bool $forceDelete = false): array
+    {
+        #Get FK violations if any
+        $violations = self::hasFKViolated($schema, $table, $nullableOnly);
+        #Go through results and fix violations if we can
+        foreach ($violations as &$fk) {
+            if ($fk['on_delete'] === 'SET NULL' && !$forceDelete) {
+                $fk['fixed'] = Query::query($fk['update'], return: 'affected');
+            } else {
+                $fk['fixed'] = Query::query($fk['delete'], return: 'affected');
+            }
+        }
+        unset($fk);
+        return $violations;
+    }
 }

@@ -97,3 +97,102 @@ A few options are supported:
 - `$noIncrement` - Remove the `AUTO_INCREMENT=X` table option. Column attribute will still be present.
 - `$ifNotExist` - Add the `IF NOT EXISTS` clause to the resulting definition.
 - `$addUse`  - Add the `USE` statement before the `CREATE` statement.
+
+## hasFKViolated
+
+```php
+\Simbiat\Database\Manage::(?string $schema = null, ?string $table = null, bool $nullableOnly = false);
+```
+
+Function to check if your table (or schema or whole database server) has any violations of `FOREIGN KEY` constraints. While `schema` and `table` are optional, it's recommended to pass them in case there are large tables in the database. Also keep in mind that due to nature of `information_schema` first run may take a while. You can additionally pass `$nullableOnly` as `true` to get only constraints that have `DELETE_RULE` set to `SET NULL`. This is mainly useful for `fixFKViolations` function.
+
+The function will return an array like this:
+```php
+array(2) {
+    #Name of the constraint
+    ["test__multiple_constraint"]=>
+    array(9) {
+        #Table where the constraint is set (with its schema)
+        ["child_table"]=>
+        string(32) "`simbiatr_simbiat`.`test__child`"
+        #Table the constraint is dependent on
+        ["parent_table"]=>
+        string(33) "`simbiatr_simbiat`.`test__parent`"
+        #Value of `DELETE_RULE`
+        ["on_delete"]=>
+        string(7) "CASCADE"
+        #Columns that are used in the constraint with their respective linkage
+        ["columns"]=>
+        array(2) {
+            [0]=>
+            array(2) {
+                ["child"]=>
+                string(12) "parentid_alt"
+                ["parent"]=>
+                string(2) "id"
+            }
+            [1]=>
+            array(2) {
+                ["child"]=>
+                string(4) "type"
+                ["parent"]=>
+                string(4) "type"
+            }
+        }
+        #Generated query you can run to get the values of the violations
+        ["select"]=>
+        string(333) "SELECT `child`.`parentid_alt`, `child`.`type` FROM `simbiatr_simbiat`.`test__child` AS `child` LEFT JOIN `simbiatr_simbiat`.`test__parent` AS `parent` ON `child`.`parentid_alt` <=> `parent`.`id` AND `child`.`type` <=> `parent`.`type` WHERE (`child`.`parentid_alt` IS NOT NULL OR `child`.`type` IS NOT NULL) AND `parent`.`id` IS NULL;"
+        #Generated query that can be run to fix the violations by setting them to `NULL`
+        ["update"]=>
+        string(446) "UPDATE `simbiatr_simbiat`.`test__child` SET `parentid_alt`=NULL, `type`=NULL WHERE (`parentid_alt`, `type`) IN (SELECT `child`.`parentid_alt`, `child`.`type` FROM `simbiatr_simbiat`.`test__child` AS `child` LEFT JOIN `simbiatr_simbiat`.`test__parent` AS `parent` ON `child`.`parentid_alt` <=> `parent`.`id` AND `child`.`type` <=> `parent`.`type` WHERE (`child`.`parentid_alt` IS NOT NULL OR `child`.`type` IS NOT NULL) AND `parent`.`id` IS NULL);"
+        #Generated query that can be run to fix the violations by deleting them
+        ["delete"]=>
+        string(414) "DELETE FROM `simbiatr_simbiat`.`test__child` WHERE (`parentid_alt`, `type`) IN (SELECT `child`.`parentid_alt`, `child`.`type` FROM `simbiatr_simbiat`.`test__child` AS `child` LEFT JOIN `simbiatr_simbiat`.`test__parent` AS `parent` ON `child`.`parentid_alt` <=> `parent`.`id` AND `child`.`type` <=> `parent`.`type` WHERE (`child`.`parentid_alt` IS NOT NULL OR `child`.`type` IS NOT NULL) AND `parent`.`id` IS NULL);"
+        #Number of violations found
+        ["count"]=>
+        int(1)
+        ["fixed"]=>
+        int(1)
+    }
+    ["test__single_constraint"]=>
+    array(9) {
+        ["child_table"]=>
+        string(32) "`simbiatr_simbiat`.`test__child`"
+        ["parent_table"]=>
+        string(33) "`simbiatr_simbiat`.`test__parent`"
+        ["on_delete"]=>
+        string(8) "SET NULL"
+        ["columns"]=>
+        array(1) {
+            [0]=>
+            array(2) {
+                ["child"]=>
+                string(8) "parentid"
+                ["parent"]=>
+                string(2) "id"
+            }
+        }
+        ["select"]=>
+        string(236) "SELECT `child`.`parentid` FROM `simbiatr_simbiat`.`test__child` AS `child` LEFT JOIN `simbiatr_simbiat`.`test__parent` AS `parent` ON `child`.`parentid` <=> `parent`.`id` WHERE (`child`.`parentid` IS NOT NULL) AND `parent`.`id` IS NULL;"
+        ["update"]=>
+        string(320) "UPDATE `simbiatr_simbiat`.`test__child` SET `parentid`=NULL WHERE (`parentid`) IN (SELECT `child`.`parentid` FROM `simbiatr_simbiat`.`test__child` AS `child` LEFT JOIN `simbiatr_simbiat`.`test__parent` AS `parent` ON `child`.`parentid` <=> `parent`.`id` WHERE (`child`.`parentid` IS NOT NULL) AND `parent`.`id` IS NULL);"
+        ["delete"]=>
+        string(305) "DELETE FROM `simbiatr_simbiat`.`test__child` WHERE (`parentid`) IN (SELECT `child`.`parentid` FROM `simbiatr_simbiat`.`test__child` AS `child` LEFT JOIN `simbiatr_simbiat`.`test__parent` AS `parent` ON `child`.`parentid` <=> `parent`.`id` WHERE (`child`.`parentid` IS NOT NULL) AND `parent`.`id` IS NULL);"
+        ["count"]=>
+        int(1)
+        ["fixed"]=>
+        int(1)
+    }
+}
+```
+
+## fixFKViolations
+
+```php
+\Simbiat\Database\Manage::fixFKViolations(?string $schema = null, ?string $table = null, bool $nullableOnly = true, bool $forceDelete = false);
+```
+
+Fix constraints' violations found by `hasFKViolated`. While `schema` and `table` are optional, it's recommended to pass them in case there are large tables in the database. Also keep in mind that due to nature of `information_schema` first run may take a while.  
+Also has two other options governing how violations will be fixed:
+- `nullableOnly` - Whether to get only nullable constraints. If set to `false` entries that are not nullable will be **REMOVED** (`DELETE` will be used, so use with caution). If set to `true` (default), only nullable constraints will be picked up violations will be updated by settings the values to `NULL`.
+- `forceDelete` - Whether to use `DELETE` even for nullable constraints. Use with caution.
