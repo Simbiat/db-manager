@@ -194,3 +194,11 @@ Also has two other options governing how violations will be fixed:
 - `forceDelete` - Whether to use `DELETE` even for nullable constraints. Use with caution.
 
 Returns array similar to `hasFKViolated`, but with extra key `fixed` which represents number of rows that were updated/deleted as part of the fix.
+
+## fixFKViolations
+
+```php
+\Simbiat\Database\Manage::rebuildIndexQuery(string $schema, string $table, string $index, bool $run = false);
+```
+
+Generates and optionally runs (if `$run` is `true`) a query to rebuild (DROP and then ADD) an index. You need to pass the schema name, the table name and the index name for this to work.

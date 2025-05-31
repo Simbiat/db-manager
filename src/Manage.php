@@ -517,4 +517,80 @@ class Manage
         unset($fk);
         return $violations;
     }
+    
+    /**
+     * @param string $schema Schema name
+     * @param string $table  Table name
+     * @param string $index  Index name
+     * @param bool   $run    Whether to run the command. If `false` - will return the command itself if it was generated or `false` if not.
+     *
+     * @return string|bool
+     */
+    public static function rebuildIndexQuery(string $schema, string $table, string $index, bool $run = false): string|bool
+    {
+        #Get the command to rebuild the index
+        $command = Query::query(
+            [
+                'SELECT
+                      IF(
+                        `INDEX_NAME` = \'PRIMARY\',
+                        CONCAT(
+                            \'ALTER TABLE `\', `TABLE_SCHEMA`, \'`.`\', `TABLE_NAME`,
+                            \'` DROP PRIMARY KEY, ADD PRIMARY KEY (\',
+                            GROUP_CONCAT(
+                              CASE
+                                  WHEN `SUB_PART` IS NOT NULL AND `COLLATION` = \'D\' THEN CONCAT(\'`\', `COLUMN_NAME`, \'`(\', `SUB_PART`, \') DESC\')
+                                  WHEN `SUB_PART` IS NOT NULL THEN CONCAT(\'`\', `COLUMN_NAME`, \'`(\', `SUB_PART`, \')\')
+                                  WHEN `COLLATION` = \'D\' THEN CONCAT(\'`\', `COLUMN_NAME`, \'` DESC\')
+                                  ELSE CONCAT(\'`\', `COLUMN_NAME`, \'`\')
+                              END
+                              ORDER BY `SEQ_IN_INDEX` SEPARATOR \', \'
+                            ),
+                            \')\',
+                            IF(`INDEX_TYPE` IN (\'BTREE\', \'HASH\'), CONCAT(\' USING \', `INDEX_TYPE`), \'\'),
+                            IF(`INDEX_COMMENT`!=\'\', CONCAT(\' COMMENT \'\'\', `INDEX_COMMENT`, \'\'\'\'), \'\'),
+                            \';\'
+                        )
+                        ,
+                        CONCAT(
+                            \'ALTER TABLE `\', `TABLE_SCHEMA`, \'`.`\', `TABLE_NAME`,
+                            \'` DROP INDEX `\', `INDEX_NAME`, \'`, ADD \',
+                            CASE
+                                WHEN `INDEX_TYPE` = \'FULLTEXT\' THEN \'FULLTEXT \'
+                                WHEN `INDEX_TYPE` = \'SPATIAL\' THEN \'SPATIAL \'
+                                WHEN `NON_UNIQUE` = 0 THEN \'UNIQUE \'
+                                ELSE \'\'
+                            END,
+                            \'INDEX `\', `INDEX_NAME`, \'` (\',
+                            GROUP_CONCAT(
+                              CASE
+                                  WHEN `SUB_PART` IS NOT NULL AND `COLLATION` = \'D\' THEN CONCAT(\'`\', `COLUMN_NAME`, \'`(\', `SUB_PART`, \') DESC\')
+                                  WHEN `SUB_PART` IS NOT NULL THEN CONCAT(\'`\', `COLUMN_NAME`, \'`(\', `SUB_PART`, \')\')
+                                  WHEN `COLLATION` = \'D\' THEN CONCAT(\'`\', `COLUMN_NAME`, \'` DESC\')
+                                  ELSE CONCAT(\'`\', `COLUMN_NAME`, \'`\')
+                              END
+                              ORDER BY `SEQ_IN_INDEX` SEPARATOR \', \'
+                            ),
+                            \')\',
+                            IF(`INDEX_TYPE` IN (\'BTREE\', \'HASH\'), CONCAT(\' USING \', `INDEX_TYPE`), \'\'),
+                            IF(`INDEX_COMMENT`!=\'\', CONCAT(\' COMMENT \'\'\', `INDEX_COMMENT`, \'\'\'\'), \'\'),
+                            \';\'
+                        )
+                      ) AS `recreate_index_sql`
+                    FROM `INFORMATION_SCHEMA`.`STATISTICS`
+                    WHERE `TABLE_SCHEMA` = :schema AND
+                          `TABLE_NAME` = :table AND
+                          `INDEX_NAME` = :index
+                    GROUP BY `TABLE_SCHEMA`, `TABLE_NAME`, `INDEX_NAME`, `INDEX_TYPE`, `NON_UNIQUE`, `INDEX_COMMENT`;'
+            ],
+            [':schema' => $schema, ':table' => $table, ':index' => $index],
+            return: 'value');
+        if (!is_string($command) || empty($command)) {
+            return false;
+        }
+        if ($run) {
+            Query::query($command);
+        }
+        return $command;
+    }
 }
