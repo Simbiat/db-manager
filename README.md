@@ -195,7 +195,7 @@ Also has two other options governing how violations will be fixed:
 
 Returns array similar to `hasFKViolated`, but with extra key `fixed` which represents number of rows that were updated/deleted as part of the fix.
 
-## fixFKViolations
+## rebuildIndexQuery
 
 ```php
 \Simbiat\Database\Manage::rebuildIndexQuery(string $schema, string $table, string $index, bool $run = false);
