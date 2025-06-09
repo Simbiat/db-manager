@@ -1,6 +1,6 @@
 # Database manager
 
-Functions to help with database management.
+Functions to help with database management. To establish connection, pass a `\PDO` object to the constructor or `null` if you are using [DB Pool](https://github.com/Simbiat/db-pool) library.
 
 ## checkTable
 
