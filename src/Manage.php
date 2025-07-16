@@ -237,56 +237,56 @@ class Manage
      * Function to get a list of all tables for a schema in order, where first you have tables without dependencies (no foreign keys), and then tables that are dependent on tables that have come before. This is useful if you want to dump backups in a specific order so that you can then restore the data without disabling foreign keys.
      * Only for MySQL/MariaDB
      *
-     * @param string $schema Optional name of the schema to limit to
-     * @param bool   $bySize Order by table size to prioritize smaller tables
+     * @param string $schema  Optional name of the schema to limit to
+     * @param bool   $by_size Order by table size to prioritize smaller tables
      *
      * @return array
      */
-    public static function showOrderedTables(string $schema = '', bool $bySize = false): array
+    public static function showOrderedTables(string $schema = '', bool $by_size = false): array
     {
         #This is the list of the tables that we will return in the end
-        $tablesOrderedFull = [];
+        $tables_ordered_full = [];
         #This is the list of the same tables, but where every element is a string of format `schema`.`table`. Used for array search only
-        $tablesNamesOnly = [];
+        $tables_names_only = [];
         #Get all tables except standard system ones and also order them by size
-        $tablesRaw = Query::query('SELECT `TABLE_SCHEMA` as `schema`, `TABLE_NAME` as `table`'.($bySize ? ', (DATA_LENGTH+INDEX_LENGTH) as `size`' : '').' FROM `INFORMATION_SCHEMA`.`TABLES` WHERE `TABLE_SCHEMA` NOT IN (\'information_schema\', \'performance_schema\', \'mysql\', \'sys\', \'test\')'.(empty($schema) ? '' : ' AND `TABLE_SCHEMA`=:schema').' ORDER BY '.($bySize ? '(DATA_LENGTH+INDEX_LENGTH), ' : '').'`TABLE_SCHEMA`, `TABLE_NAME`;', (empty($schema) ? [] : [':schema' => [$schema, 'string']]), return: 'all');
+        $tables_raw = Query::query('SELECT `TABLE_SCHEMA` as `schema`, `TABLE_NAME` as `table`'.($by_size ? ', (DATA_LENGTH+INDEX_LENGTH) as `size`' : '').' FROM `INFORMATION_SCHEMA`.`TABLES` WHERE `TABLE_SCHEMA` NOT IN (\'information_schema\', \'performance_schema\', \'mysql\', \'sys\', \'test\')'.(empty($schema) ? '' : ' AND `TABLE_SCHEMA`=:schema').' ORDER BY '.($by_size ? '(DATA_LENGTH+INDEX_LENGTH), ' : '').'`TABLE_SCHEMA`, `TABLE_NAME`;', (empty($schema) ? [] : [':schema' => [$schema, 'string']]), return: 'all');
         #Get dependencies for each table
-        foreach ($tablesRaw as $key => $table) {
+        foreach ($tables_raw as $key => $table) {
             $table['dependencies'] = self::selectAllDependencies($table['schema'], $table['table']);
             if (count($table['dependencies']) === 0) {
                 #Add this to the ordered list right away if we have no dependencies
-                $tablesOrderedFull[] = $table;
-                $tablesNamesOnly[] = '`'.$table['schema'].'`.`'.$table['table'].'`';
-                unset($tablesRaw[$key]);
+                $tables_ordered_full[] = $table;
+                $tables_names_only[] = '`'.$table['schema'].'`.`'.$table['table'].'`';
+                unset($tables_raw[$key]);
             } else {
                 #Update the raw list with dependencies to use further
-                $tablesRaw[$key] = $table;
+                $tables_raw[$key] = $table;
             }
         }
         #Check if we have any cyclic references among the remaining tables
-        if (!empty(self::checkCyclicForeignKeys($tablesRaw))) {
+        if (!empty(self::checkCyclicForeignKeys($tables_raw))) {
             #Throw an error, because with cyclic references there is no way to determine the order at all
             throw new \PDOException('Cyclic foreign key references detected.');
         }
         #While is used because when we reach the end in first run, we may still have items left in the array
-        while (!empty($tablesRaw)) {
-            foreach ($tablesRaw as $key => $table) {
+        while (!empty($tables_raw)) {
+            foreach ($tables_raw as $key => $table) {
                 #Check if the table is already present in the ordered list
-                foreach ($table['dependencies'] as $dKey => $dependency) {
+                foreach ($table['dependencies'] as $d_key => $dependency) {
                     #If a dependency is not already present in the list of tables - go to the next table
-                    if (!in_array($dependency, $tablesNamesOnly, true)) {
+                    if (!in_array($dependency, $tables_names_only, true)) {
                         continue 2;
                     }
                     #Remove dependency
-                    unset($tablesRaw[$key]['dependencies'][$dKey]);
+                    unset($tables_raw[$key]['dependencies'][$d_key]);
                 }
                 #If we are here, all dependencies are already in the list, so we can add the current table to the list, as well
-                $tablesOrderedFull[] = $table;
-                $tablesNamesOnly[] = '`'.$table['schema'].'`.`'.$table['table'].'`';
-                unset($tablesRaw[$key]);
+                $tables_ordered_full[] = $table;
+                $tables_names_only[] = '`'.$table['schema'].'`.`'.$table['table'].'`';
+                unset($tables_raw[$key]);
             }
         }
-        return $tablesOrderedFull;
+        return $tables_ordered_full;
     }
     
     /**
@@ -371,15 +371,15 @@ class Manage
      * Due to `SHOW CREATE TABLE` being special, we can't use it as a sub-query, so need to do 2 queries instead.
      * Only for MySQL/MariaDB
      *
-     * @param string $schema      Schema name.
-     * @param string $table       Table name.
-     * @param bool   $noIncrement Remove the `AUTO_INCREMENT=X` table option. Column attribute will still be present.
-     * @param bool   $ifNotExist  Add the `IF NOT EXISTS` clause to the resulting definition.
-     * @param bool   $addUse      Add the `USE` statement before the `CREATE` statement.
+     * @param string $schema       Schema name.
+     * @param string $table        Table name.
+     * @param bool   $no_increment Remove the `AUTO_INCREMENT=X` table option. Column attribute will still be present.
+     * @param bool   $if_not_exist Add the `IF NOT EXISTS` clause to the resulting definition.
+     * @param bool   $add_use      Add the `USE` statement before the `CREATE` statement.
      *
      * @return string|null
      */
-    public static function showCreateTable(string $schema, string $table, bool $noIncrement = true, bool $ifNotExist = false, bool $addUse = false): ?string
+    public static function showCreateTable(string $schema, string $table, bool $no_increment = true, bool $if_not_exist = false, bool $add_use = false): ?string
     {
         #Get the original create function
         $create = Query::query('SHOW CREATE TABLE `'.$schema.'`.`'.$table.'`;', fetch_argument: 1, return: 'value');
@@ -388,25 +388,25 @@ class Manage
             $create .= ';';
         }
         #Get current ROW_FORMAT value
-        $rowFormat = Query::query('SELECT `ROW_FORMAT` FROM `information_schema`.`TABLES` WHERE `TABLE_SCHEMA`=:schema AND `TABLE_NAME`=:table;', [':schema' => $schema, ':table' => $table], return: 'value');
+        $row_format = Query::query('SELECT `ROW_FORMAT` FROM `information_schema`.`TABLES` WHERE `TABLE_SCHEMA`=:schema AND `TABLE_NAME`=:table;', [':schema' => $schema, ':table' => $table], return: 'value');
         #Check the value against create statement
-        if (preg_match('/ROW_FORMAT='.$rowFormat.'/ui', $create) !== 1) {
+        if (preg_match('/ROW_FORMAT='.$row_format.'/ui', $create) !== 1) {
             #Value differs or missing
             if (preg_match('/ROW_FORMAT=/ui', $create) === 1) {
                 #If ROW_FORMAT is already present, we need to replace it
-                $create = preg_replace('/ROW_FORMAT=[^ ]+/ui', 'ROW_FORMAT='.$rowFormat.';', $create);
+                $create = preg_replace('/ROW_FORMAT=[^ ]+/ui', 'ROW_FORMAT='.$row_format.';', $create);
             } else {
                 #Else we need to add it to the end
-                $create = preg_replace('/;$/u', ' ROW_FORMAT='.$rowFormat.';', $create);
+                $create = preg_replace('/;$/u', ' ROW_FORMAT='.$row_format.';', $create);
             }
         }
-        if ($noIncrement) {
+        if ($no_increment) {
             $create = preg_replace('/(\s* AUTO_INCREMENT=\d+)/ui', '', $create);
         }
-        if ($ifNotExist) {
+        if ($if_not_exist) {
             $create = preg_replace('/^CREATE TABLE/ui', /** @lang text */ 'CREATE TABLE IF NOT EXISTS', $create);
         }
-        if ($addUse) {
+        if ($add_use) {
             $create = 'USE `'.$schema.'`;'.PHP_EOL.$create;
         }
         #Return result
@@ -416,17 +416,17 @@ class Manage
     /**
      * Check if there are any `FOREIGN KEY` constraint violations in the database. While `schema` and `table` are optional, it's recommended to pass them in case there are large tables in the database.
      *
-     * @param string|null $schema       Optional schema name.
-     * @param string|null $table        Optional table name.
-     * @param bool        $nullableOnly Whether to return only nullable constraints. Practically required only for `fixFKViolations` or similar automations.
+     * @param string|null $schema        Optional schema name.
+     * @param string|null $table         Optional table name.
+     * @param bool        $nullable_only Whether to return only nullable constraints. Practically required only for `fixFKViolations` or similar automations.
      *
      * @return array
      */
-    public static function hasFKViolated(?string $schema = null, ?string $table = null, bool $nullableOnly = false): array
+    public static function hasFKViolated(?string $schema = null, ?string $table = null, bool $nullable_only = false): array
     {
         #Get Foreign Key constraints for the table
         
-        $foreignKeys = Query::query('SELECT
+        $foreign_keys = Query::query('SELECT
                                                 `tc`.`CONSTRAINT_NAME` as `name`,
                                                 CONCAT(\'`\', `tc`.`TABLE_SCHEMA`, \'`.`\', `tc`.`TABLE_NAME`, \'`\') AS `child_table`,
                                                 `kcu`.`COLUMN_NAME` AS `child_column`,
@@ -446,12 +446,12 @@ class Manage
             #Space after named identifiers is important here, or the query can fail
             (empty($schema) ? '' : 'AND `tc`.`TABLE_SCHEMA` = :schema ').
             (empty($table) ? '' : 'AND `tc`.`TABLE_NAME` = :table ').
-            ($nullableOnly ? ' AND `ref`.`DELETE_RULE`=\'SET NULL\' ' : '').
+            ($nullable_only ? ' AND `ref`.`DELETE_RULE`=\'SET NULL\' ' : '').
             'ORDER BY `tc`.`CONSTRAINT_NAME`, `kcu`.`ORDINAL_POSITION`;',
             [':schema' => $schema, ':table' => $table], return: 'all');
         #Group by constraint to handle multi-column constraints
         $constraints = [];
-        foreach ($foreignKeys as $constraint) {
+        foreach ($foreign_keys as $constraint) {
             $constraints[$constraint['name']]['child_table'] = $constraint['child_table'];
             $constraints[$constraint['name']]['parent_table'] = $constraint['parent_table'];
             $constraints[$constraint['name']]['on_delete'] = $constraint['on_delete'];
@@ -461,29 +461,29 @@ class Manage
             ];
         }
         foreach ($constraints as $name => &$fk) {
-            #Build column list, JOIN and WHERE conditions
+            #Build the column list, JOIN and WHERE conditions
             $children = [];
-            $joinConditions = [];
-            $whereConditions = [];
-            $forUpdate = [];
+            $join_conditions = [];
+            $where_conditions = [];
+            $for_update = [];
             foreach ($fk['columns'] as $col) {
                 $children[] = '`child`.`'.$col['child'].'`';
-                $joinConditions[] = '`child`.`'.$col['child'].'` <=> `parent`.`'.$col['parent'].'`';
-                $whereConditions[] = '`child`.`'.$col['child'].'` IS NOT NULL';
-                $forUpdate[] = '`'.$col['child'].'`=NULL';
+                $join_conditions[] = '`child`.`'.$col['child'].'` <=> `parent`.`'.$col['parent'].'`';
+                $where_conditions[] = '`child`.`'.$col['child'].'` IS NOT NULL';
+                $for_update[] = '`'.$col['child'].'`=NULL';
             }
-            $columnList = implode(', ', $children);
-            $onClause = implode(' AND ', $joinConditions);
-            $whereClause = implode(' OR ', $whereConditions);
+            $column_list = implode(', ', $children);
+            $on_clause = implode(' AND ', $join_conditions);
+            $where_clause = implode(' OR ', $where_conditions);
             #Generate the query to get values of violating rows. Can be useful for further processing
             $fk['select'] = /** @lang SQL */
-                'SELECT '.$columnList.' FROM '.$fk['child_table'].' AS `child` LEFT JOIN '.$fk['parent_table'].' AS `parent` ON '.$onClause.' WHERE ('.$whereClause.') AND `parent`.`'.$fk['columns'][0]['parent'].'` IS NULL;';
+                'SELECT '.$column_list.' FROM '.$fk['child_table'].' AS `child` LEFT JOIN '.$fk['parent_table'].' AS `parent` ON '.$on_clause.' WHERE ('.$where_clause.') AND `parent`.`'.$fk['columns'][0]['parent'].'` IS NULL;';
             #Generate the queries to fix the violations
             $fk['update'] = /** @lang SQL */
-                preg_replace('/;\)$/u', ');', 'UPDATE '.$fk['child_table'].' SET '.implode(', ', $forUpdate).' WHERE ('.str_replace('`child`.', '', $columnList).') IN ('.$fk['select'].')');
-            $fk['delete'] = preg_replace('/;\)$/u', ');', 'DELETE FROM '.$fk['child_table'].' WHERE ('.str_replace('`child`.', '', $columnList).') IN ('.$fk['select'].')');
+                preg_replace('/;\)$/u', ');', 'UPDATE '.$fk['child_table'].' SET '.implode(', ', $for_update).' WHERE ('.str_replace('`child`.', '', $column_list).') IN ('.$fk['select'].')');
+            $fk['delete'] = preg_replace('/;\)$/u', ');', 'DELETE FROM '.$fk['child_table'].' WHERE ('.str_replace('`child`.', '', $column_list).') IN ('.$fk['select'].')');
             #Get the count of violating rows
-            $fk['count'] = Query::query('SELECT COUNT(*) AS `count` FROM '.$fk['child_table'].' AS `child` LEFT JOIN '.$fk['parent_table'].' AS `parent` ON '.$onClause.' WHERE ('.$whereClause.') AND `parent`.`'.$fk['columns'][0]['parent'].'` IS NULL;', return: 'count');
+            $fk['count'] = Query::query('SELECT COUNT(*) AS `count` FROM '.$fk['child_table'].' AS `child` LEFT JOIN '.$fk['parent_table'].' AS `parent` ON '.$on_clause.' WHERE ('.$where_clause.') AND `parent`.`'.$fk['columns'][0]['parent'].'` IS NULL;', return: 'count');
             if ($fk['count'] === 0) {
                 unset($constraints[$name]);
             }
@@ -495,20 +495,20 @@ class Manage
     /**
      * Fix found constraints' violations. While `schema` and `table` are optional, it's recommended to pass them in case there are large tables in the database.
      *
-     * @param string|null $schema       Optional schema name.
-     * @param string|null $table        Optional table name.
-     * @param bool        $nullableOnly Whether to get only nullable constraints. If set to `false` entries that are not nullable will be **REMOVED** (`DELETE` will be used, so use with caution). If set to `true` (default), only nullable constraints will be picked up violations will be updated by settings the values to `NULL`.
-     * @param bool        $forceDelete  Whether to use `DELETE` even for nullable constraints. Use with caution.
+     * @param string|null $schema        Optional schema name.
+     * @param string|null $table         Optional table name.
+     * @param bool        $nullable_only Whether to get only nullable constraints. If set to `false` entries that are not nullable will be **REMOVED** (`DELETE` will be used, so use with caution). If set to `true` (default), only nullable constraints will be picked up violations will be updated by settings the values to `NULL`.
+     * @param bool        $force_delete  Whether to use `DELETE` even for nullable constraints. Use with caution.
      *
      * @return array
      */
-    public static function fixFKViolations(?string $schema = null, ?string $table = null, bool $nullableOnly = true, bool $forceDelete = false): array
+    public static function fixFKViolations(?string $schema = null, ?string $table = null, bool $nullable_only = true, bool $force_delete = false): array
     {
         #Get FK violations if any
-        $violations = self::hasFKViolated($schema, $table, $nullableOnly);
+        $violations = self::hasFKViolated($schema, $table, $nullable_only);
         #Go through results and fix violations if we can
         foreach ($violations as &$fk) {
-            if ($fk['on_delete'] === 'SET NULL' && !$forceDelete) {
+            if ($fk['on_delete'] === 'SET NULL' && !$force_delete) {
                 $fk['fixed'] = Query::query($fk['update'], return: 'affected');
             } else {
                 $fk['fixed'] = Query::query($fk['delete'], return: 'affected');

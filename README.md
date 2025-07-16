@@ -53,10 +53,10 @@ Checks if a column with a provided name exists in a table and returns respective
 ## showOrderedTables
 
 ```php
-\Simbiat\Database\Manage::showOrderedTables(string $schema = '', bool $bySize = false);
+\Simbiat\Database\Manage::showOrderedTables(string $schema = '', bool $by_size = false);
 ```
 
-Function to get a list of all tables for a schema (or all schemas, if `$schema` is empty) in order, where first you have tables without dependencies (no foreign keys), and then tables that are dependent on tables that have come before. This is useful if you want to dump backups in a specific order so that you can then restore the data without disabling foreign keys. Set `$bySize` to `true` to also sort by size from smallest to largest.  
+Function to get a list of all tables for a schema (or all schemas, if `$schema` is empty) in order, where first you have tables without dependencies (no foreign keys), and then tables that are dependent on tables that have come before. This is useful if you want to dump backups in a specific order so that you can then restore the data without disabling foreign keys. Set `$by_size` to `true` to also sort by size from smallest to largest.  
 Can't guarantee work on anything besides MySQL/MariaDB. Does not work with cyclic dependencies.
 
 ## checkCyclicForeignKeys
@@ -88,23 +88,23 @@ Can't guarantee work on anything besides MySQL/MariaDB.
 ## showCreateTable
 
 ```php
-\Simbiat\Database\Manage::showCreateTable(string $schema, string $table, bool $noIncrement = true, bool $ifNotExist = false, bool $addUse = false);
+\Simbiat\Database\Manage::showCreateTable(string $schema, string $table, bool $no_increment = true, bool $if_not_exist = false, bool $add_use = false);
 ```
 
 Function to restore `ROW_FORMAT` value to table definition.  
 MySQL/MariaDB may now have `ROW_FORMAT` in `SHOW CREATE TABLE` output or have a value, which is different from the current one. This function amends that.  
 A few options are supported:
-- `$noIncrement` - Remove the `AUTO_INCREMENT=X` table option. Column attribute will still be present.
-- `$ifNotExist` - Add the `IF NOT EXISTS` clause to the resulting definition.
-- `$addUse`  - Add the `USE` statement before the `CREATE` statement.
+- `$no_increment` - Remove the `AUTO_INCREMENT=X` table option. Column attribute will still be present.
+- `$if_not_exist` - Add the `IF NOT EXISTS` clause to the resulting definition.
+- `$add_use`  - Add the `USE` statement before the `CREATE` statement.
 
 ## hasFKViolated
 
 ```php
-\Simbiat\Database\Manage::(?string $schema = null, ?string $table = null, bool $nullableOnly = false);
+\Simbiat\Database\Manage::(?string $schema = null, ?string $table = null, bool $nullable_only = false);
 ```
 
-Function to check if your table (or schema or whole database server) has any violations of `FOREIGN KEY` constraints. While `schema` and `table` are optional, it's recommended to pass them in case there are large tables in the database. Also keep in mind that due to nature of `information_schema` first run may take a while. You can additionally pass `$nullableOnly` as `true` to get only constraints that have `DELETE_RULE` set to `SET NULL`. This is mainly useful for `fixFKViolations` function.
+Function to check if your table (or schema or whole database server) has any violations of `FOREIGN KEY` constraints. While `schema` and `table` are optional, it's recommended to pass them in case there are large tables in the database. Also keep in mind that due to nature of `information_schema` first run may take a while. You can additionally pass `$nullable_only` as `true` to get only constraints that have `DELETE_RULE` set to `SET NULL`. This is mainly useful for `fixFKViolations` function.
 
 The function will return an array like this:
 ```php
@@ -185,13 +185,13 @@ array(2) {
 ## fixFKViolations
 
 ```php
-\Simbiat\Database\Manage::fixFKViolations(?string $schema = null, ?string $table = null, bool $nullableOnly = true, bool $forceDelete = false);
+\Simbiat\Database\Manage::fixFKViolations(?string $schema = null, ?string $table = null, bool $nullable_only = true, bool $force_delete = false);
 ```
 
 Fix constraints' violations found by `hasFKViolated`. While `schema` and `table` are optional, it's recommended to pass them in case there are large tables in the database. Also keep in mind that due to nature of `information_schema` first run may take a while.  
 Also has two other options governing how violations will be fixed:
-- `nullableOnly` - Whether to get only nullable constraints. If set to `false` entries that are not nullable will be **REMOVED** (`DELETE` will be used, so use with caution). If set to `true` (default), only nullable constraints will be picked up violations will be updated by settings the values to `NULL`.
-- `forceDelete` - Whether to use `DELETE` even for nullable constraints. Use with caution.
+- `nullable_only` - Whether to get only nullable constraints. If set to `false` entries that are not nullable will be **REMOVED** (`DELETE` will be used, so use with caution). If set to `true` (default), only nullable constraints will be picked up violations will be updated by settings the values to `NULL`.
+- `force_delete` - Whether to use `DELETE` even for nullable constraints. Use with caution.
 
 Returns array similar to `hasFKViolated`, but with extra key `fixed` which represents number of rows that were updated/deleted as part of the fix.
 
