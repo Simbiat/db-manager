@@ -23,7 +23,7 @@ class Manage
     public function __construct(?\PDO $dbh = null)
     {
         if ($dbh === null) {
-            if (method_exists(Pool::class, 'openConnection')) {
+            if (\method_exists(Pool::class, 'openConnection')) {
                 self::$dbh = Pool::openConnection();
             } else {
                 throw new \RuntimeException('Pool class not loaded and no PDO object provided.');
@@ -169,7 +169,7 @@ class Manage
         }
         try {
             $result = Query::query($query, $bindings, return: 'value');
-            return preg_match('/^YES$/ui', $result) === 1;
+            return \preg_match('/^YES$/ui', $result) === 1;
         } catch (\Throwable $e) {
             throw new \RuntimeException('Failed to check if table exists with `'.$e->getMessage().'`', 0, $e);
         }
@@ -390,24 +390,24 @@ class Manage
         #Get current ROW_FORMAT value
         $row_format = Query::query('SELECT `ROW_FORMAT` FROM `information_schema`.`TABLES` WHERE `TABLE_SCHEMA`=:schema AND `TABLE_NAME`=:table;', [':schema' => $schema, ':table' => $table], return: 'value');
         #Check the value against create statement
-        if (preg_match('/ROW_FORMAT='.$row_format.'/ui', $create) !== 1) {
+        if (\preg_match('/ROW_FORMAT='.$row_format.'/ui', $create) !== 1) {
             #Value differs or missing
-            if (preg_match('/ROW_FORMAT=/ui', $create) === 1) {
+            if (\preg_match('/ROW_FORMAT=/ui', $create) === 1) {
                 #If ROW_FORMAT is already present, we need to replace it
-                $create = preg_replace('/ROW_FORMAT=[^ ]+/ui', 'ROW_FORMAT='.$row_format.';', $create);
+                $create = \preg_replace('/ROW_FORMAT=[^ ]+/ui', 'ROW_FORMAT='.$row_format.';', $create);
             } else {
                 #Else we need to add it to the end
-                $create = preg_replace('/;$/u', ' ROW_FORMAT='.$row_format.';', $create);
+                $create = \preg_replace('/;$/u', ' ROW_FORMAT='.$row_format.';', $create);
             }
         }
         if ($no_increment) {
-            $create = preg_replace('/(\s* AUTO_INCREMENT=\d+)/ui', '', $create);
+            $create = \preg_replace('/(\s* AUTO_INCREMENT=\d+)/ui', '', $create);
         }
         if ($if_not_exist) {
-            $create = preg_replace('/^CREATE TABLE/ui', /** @lang text */ 'CREATE TABLE IF NOT EXISTS', $create);
+            $create = \preg_replace('/^CREATE TABLE/ui', /** @lang text */ 'CREATE TABLE IF NOT EXISTS', $create);
         }
         if ($add_use) {
-            $create = 'USE `'.$schema.'`;'.PHP_EOL.$create;
+            $create = 'USE `'.$schema.'`;'.\PHP_EOL.$create;
         }
         #Return result
         return $create;
@@ -472,16 +472,16 @@ class Manage
                 $where_conditions[] = '`child`.`'.$col['child'].'` IS NOT NULL';
                 $for_update[] = '`'.$col['child'].'`=NULL';
             }
-            $column_list = implode(', ', $children);
-            $on_clause = implode(' AND ', $join_conditions);
-            $where_clause = implode(' OR ', $where_conditions);
+            $column_list = \implode(', ', $children);
+            $on_clause = \implode(' AND ', $join_conditions);
+            $where_clause = \implode(' OR ', $where_conditions);
             #Generate the query to get values of violating rows. Can be useful for further processing
             $fk['select'] = /** @lang SQL */
                 'SELECT '.$column_list.' FROM '.$fk['child_table'].' AS `child` LEFT JOIN '.$fk['parent_table'].' AS `parent` ON '.$on_clause.' WHERE ('.$where_clause.') AND `parent`.`'.$fk['columns'][0]['parent'].'` IS NULL;';
             #Generate the queries to fix the violations
             $fk['update'] = /** @lang SQL */
-                preg_replace('/;\)$/u', ');', 'UPDATE '.$fk['child_table'].' SET '.implode(', ', $for_update).' WHERE ('.str_replace('`child`.', '', $column_list).') IN ('.$fk['select'].')');
-            $fk['delete'] = preg_replace('/;\)$/u', ');', 'DELETE FROM '.$fk['child_table'].' WHERE ('.str_replace('`child`.', '', $column_list).') IN ('.$fk['select'].')');
+                \preg_replace('/;\)$/u', ');', 'UPDATE '.$fk['child_table'].' SET '.\implode(', ', $for_update).' WHERE ('.\str_replace('`child`.', '', $column_list).') IN ('.$fk['select'].')');
+            $fk['delete'] = \preg_replace('/;\)$/u', ');', 'DELETE FROM '.$fk['child_table'].' WHERE ('.\str_replace('`child`.', '', $column_list).') IN ('.$fk['select'].')');
             #Get the count of violating rows
             $fk['count'] = Query::query('SELECT COUNT(*) AS `count` FROM '.$fk['child_table'].' AS `child` LEFT JOIN '.$fk['parent_table'].' AS `parent` ON '.$on_clause.' WHERE ('.$where_clause.') AND `parent`.`'.$fk['columns'][0]['parent'].'` IS NULL;', return: 'count');
             if ($fk['count'] === 0) {
