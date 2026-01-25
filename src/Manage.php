@@ -15,7 +15,7 @@ class Manage
     /**
      * @var null|\PDO PDO object to run queries against
      */
-    public static ?\PDO $dbh = null;
+    private(set) static ?\PDO $dbh = null;
     
     /**
      * @param \PDO|null $dbh PDO obj
