@@ -16,7 +16,7 @@ class Manage
      * @var null|\PDO PDO object to run queries against
      */
     private(set) static ?\PDO $dbh = null;
-    
+
     /**
      * @param \PDO|null $dbh PDO obj
      */
@@ -30,9 +30,11 @@ class Manage
             }
         } else {
             self::$dbh = $dbh;
+            // Ensure Query has a PDF object in it
+            new Query(self::$dbh);
         }
     }
-    
+
     /**
      * Check if table(s) exist(s)
      *
@@ -77,7 +79,7 @@ class Manage
             throw new \RuntimeException('Failed to check if table exists with `'.$e->getMessage().'`', 0, $e);
         }
     }
-    
+
     /**
      * Get column data type
      *
@@ -109,7 +111,7 @@ class Manage
             throw new \RuntimeException('Failed to check if table exists with `'.$e->getMessage().'`', 0, $e);
         }
     }
-    
+
     /**
      * Get column description
      *
@@ -141,7 +143,7 @@ class Manage
             throw new \RuntimeException('Failed to check if table exists with `'.$e->getMessage().'`', 0, $e);
         }
     }
-    
+
     /**
      * Check if a column is nullable
      *
@@ -174,7 +176,7 @@ class Manage
             throw new \RuntimeException('Failed to check if table exists with `'.$e->getMessage().'`', 0, $e);
         }
     }
-    
+
     /**
      * Check if Foreign Key name exists
      *
@@ -206,7 +208,7 @@ class Manage
             throw new \RuntimeException('Failed to check if table exists with `'.$e->getMessage().'`', 0, $e);
         }
     }
-    
+
     /**
      * Check if a column exists in a table
      *
@@ -232,7 +234,7 @@ class Manage
             throw new \RuntimeException('Failed to check if column exists with `'.$e->getMessage().'`', 0, $e);
         }
     }
-    
+
     /**
      * Function to get a list of all tables for a schema in order, where first you have tables without dependencies (no foreign keys), and then tables that are dependent on tables that have come before. This is useful if you want to dump backups in a specific order so that you can then restore the data without disabling foreign keys.
      * Only for MySQL/MariaDB
@@ -288,7 +290,7 @@ class Manage
         }
         return $tables_ordered_full;
     }
-    
+
     /**
      * This function allows you to check for cyclic foreign keys when 2 (or more) tables depend on each other.
      * This is considered bad practice even with nullable columns, but you may easily miss them as your database grows, especially if you have chains of 3 or more tables.
@@ -324,7 +326,7 @@ class Manage
         }
         return $tables;
     }
-    
+
     /**
      * Function to recursively get all dependencies (foreign keys) of a table.
      * Only for MySQL/MariaDB
@@ -364,7 +366,7 @@ class Manage
             [':schema' => $schema, ':table' => $table], return: 'column'
         );
     }
-    
+
     /**
      * Function to restore `ROW_FORMAT` value to table definition.
      * MySQL/MariaDB may now have `ROW_FORMAT` in the `SHOW CREATE TABLE` output or have a value, which is different from the current one. This function amends that.
@@ -412,7 +414,7 @@ class Manage
         #Return result
         return $create;
     }
-    
+
     /**
      * Check if there are any `FOREIGN KEY` constraint violations in the database. While `schema` and `table` are optional, it's recommended to pass them in case there are large tables in the database.
      *
@@ -425,7 +427,7 @@ class Manage
     public static function hasFKViolated(?string $schema = null, ?string $table = null, bool $nullable_only = false): array
     {
         #Get Foreign Key constraints for the table
-        
+
         $foreign_keys = Query::query('SELECT
                                                 `tc`.`CONSTRAINT_NAME` as `name`,
                                                 CONCAT(\'`\', `tc`.`TABLE_SCHEMA`, \'`.`\', `tc`.`TABLE_NAME`, \'`\') AS `child_table`,
@@ -491,7 +493,7 @@ class Manage
         unset($fk);
         return $constraints;
     }
-    
+
     /**
      * Fix found constraints' violations. While `schema` and `table` are optional, it's recommended to pass them in case there are large tables in the database.
      *
@@ -517,7 +519,7 @@ class Manage
         unset($fk);
         return $violations;
     }
-    
+
     /**
      * @param string $schema Schema name
      * @param string $table  Table name
