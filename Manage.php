@@ -53,7 +53,7 @@ class Manage
                 ':table' =>
                     [
                         $table,
-                        is_string($table) ? 'string' : 'in',
+                        \is_string($table) ? 'string' : 'in',
                         'string'
                     ]
             ];
@@ -63,13 +63,13 @@ class Manage
                 ':table' =>
                     [
                         $table,
-                        is_string($table) ? 'string' : 'in',
+                        \is_string($table) ? 'string' : 'in',
                         'string'
                     ],
                 ':schema' =>
                     [
                         $schema,
-                        is_string($schema) ? 'string' : 'in',
+                        \is_string($schema) ? 'string' : 'in',
                         'string'
                     ]
             ];
@@ -256,7 +256,7 @@ class Manage
         // Get dependencies for each table
         foreach ($tables_raw as $key => $table) {
             $table['dependencies'] = self::selectAllDependencies($table['schema'], $table['table']);
-            if (count($table['dependencies']) === 0) {
+            if (\count($table['dependencies']) === 0) {
                 // Add this to the ordered list right away if we have no dependencies
                 $tables_ordered_full[] = $table;
                 $tables_names_only[] = '`'.$table['schema'].'`.`'.$table['table'].'`';
@@ -277,7 +277,7 @@ class Manage
                 // Check if the table is already present in the ordered list
                 foreach ($table['dependencies'] as $d_key => $dependency) {
                     // If a dependency is not already present in the list of tables - go to the next table
-                    if (!in_array($dependency, $tables_names_only, true)) {
+                    if (!\in_array($dependency, $tables_names_only, true)) {
                         continue 2;
                     }
                     // Remove dependency
@@ -317,7 +317,7 @@ class Manage
                 $table['dependencies'] = self::selectAllDependencies($table['schema'], $table['table']);
             }
             // Check if the dependency list has the table itself
-            if (in_array('`'.$table['schema'].'`.`'.$table['table'].'`', $table['dependencies'], true)) {
+            if (\in_array('`'.$table['schema'].'`.`'.$table['table'].'`', $table['dependencies'], true)) {
                 // Update the list (only really needed if we did not have a prepared list of tables from the start)
                 $tables[$key] = $table;
             } else {
@@ -387,7 +387,7 @@ class Manage
         // Get the original create function
         $create = Query::query('SHOW CREATE TABLE `'.$schema.'`.`'.$table.'`;', fetch_argument: 1, return: 'value');
         // Add semicolon for consistency
-        if (!str_ends_with(';', $create)) {
+        if (!\str_ends_with(';', $create)) {
             $create .= ';';
         }
         // Get current ROW_FORMAT value
@@ -588,7 +588,7 @@ class Manage
             ],
             [':schema' => $schema, ':table' => $table, ':index' => $index],
             return: 'value');
-        if (!is_string($command) || empty($command)) {
+        if (!\is_string($command) || empty($command)) {
             return false;
         }
         if ($run) {
