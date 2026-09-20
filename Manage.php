@@ -172,6 +172,7 @@ class Manage
         }
         try {
             $result = Query::query($query, $bindings, return: 'value');
+
             return \preg_match('/^YES$/ui', $result) === 1;
         } catch (\Throwable $e) {
             throw new \RuntimeException('Failed to check if table exists with `'.$e->getMessage().'`', 0, $e);
@@ -289,6 +290,7 @@ class Manage
                 unset($tables_raw[$key]);
             }
         }
+
         return $tables_ordered_full;
     }
 
@@ -325,6 +327,7 @@ class Manage
                 unset($tables[$key]);
             }
         }
+
         return $tables;
     }
 
@@ -412,6 +415,7 @@ class Manage
         if ($add_use) {
             $create = 'USE `'.$schema.'`;'.\PHP_EOL.$create;
         }
+
         // Return result
         return $create;
     }
@@ -492,6 +496,7 @@ class Manage
             }
         }
         unset($fk);
+
         return $constraints;
     }
 
@@ -511,13 +516,17 @@ class Manage
         $violations = self::hasFKViolated($schema, $table, $nullable_only);
         // Go through results and fix violations if we can
         foreach ($violations as &$fk) {
-            if ($fk['on_delete'] === 'SET NULL' && !$force_delete) {
+            if (
+                $fk['on_delete'] === 'SET NULL'
+                && !$force_delete
+            ) {
                 $fk['fixed'] = Query::query($fk['update'], return: 'affected');
             } else {
                 $fk['fixed'] = Query::query($fk['delete'], return: 'affected');
             }
         }
         unset($fk);
+
         return $violations;
     }
 
@@ -588,12 +597,16 @@ class Manage
             ],
             [':schema' => $schema, ':table' => $table, ':index' => $index],
             return: 'value');
-        if (!\is_string($command) || empty($command)) {
+        if (
+            !\is_string($command)
+            || empty($command)
+        ) {
             return false;
         }
         if ($run) {
             Query::query($command);
         }
+
         return $command;
     }
 }
