@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace Simbiat\Database;
 
-use function count;
-use function in_array;
-use function is_string;
-
 /**
  * Useful semantic wrappers to manage your database
  */
@@ -54,24 +50,24 @@ class Manage
                     [
                         $table,
                         \is_string($table) ? 'string' : 'in',
-                        'string'
-                    ]
+                        'string',
+                    ],
             ];
         } else {
             $query = 'SELECT COUNT(*) as `count` FROM `information_schema`.`TABLES` WHERE `TABLE_NAME` IN(:table) AND `TABLE_SCHEMA` IN(:schema);';
             $bindings = [
-                ':table' =>
-                    [
-                        $table,
-                        \is_string($table) ? 'string' : 'in',
-                        'string'
-                    ],
                 ':schema' =>
                     [
                         $schema,
                         \is_string($schema) ? 'string' : 'in',
-                        'string'
-                    ]
+                        'string',
+                    ],
+                ':table' =>
+                    [
+                        $table,
+                        \is_string($table) ? 'string' : 'in',
+                        'string',
+                    ],
             ];
         }
         try {
@@ -95,15 +91,15 @@ class Manage
         if (empty($schema)) {
             $query = 'SELECT `DATA_TYPE` FROM `information_schema`.`COLUMNS` WHERE `TABLE_NAME`=:table AND `COLUMN_NAME`=:column LIMIT 1;';
             $bindings = [
+                ':column' => $column,
                 ':table' => $table,
-                ':column' => $column
             ];
         } else {
             $query = 'SELECT `DATA_TYPE` FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA`=:schema AND `TABLE_NAME`=:table AND `COLUMN_NAME`=:column;';
             $bindings = [
-                ':table' => $table,
                 ':column' => $column,
-                ':schema' => $schema
+                ':schema' => $schema,
+                ':table' => $table,
             ];
         }
         try {
@@ -127,15 +123,15 @@ class Manage
         if (empty($schema)) {
             $query = 'SELECT `COLUMN_COMMENT` FROM `information_schema`.`COLUMNS` WHERE `TABLE_NAME`=:table AND `COLUMN_NAME`=:column LIMIT 1;';
             $bindings = [
+                ':column' => $column,
                 ':table' => $table,
-                ':column' => $column
             ];
         } else {
             $query = 'SELECT `COLUMN_COMMENT` FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA`=:schema AND `TABLE_NAME`=:table AND `COLUMN_NAME`=:column;';
             $bindings = [
-                ':table' => $table,
                 ':column' => $column,
-                ':schema' => $schema
+                ':schema' => $schema,
+                ':table' => $table,
             ];
         }
         try {
@@ -159,15 +155,15 @@ class Manage
         if (empty($schema)) {
             $query = 'SELECT `IS_NULLABLE` FROM `information_schema`.`COLUMNS` WHERE `TABLE_NAME`=:table AND `COLUMN_NAME`=:column LIMIT 1;';
             $bindings = [
+                ':column' => $column,
                 ':table' => $table,
-                ':column' => $column
             ];
         } else {
             $query = 'SELECT `IS_NULLABLE` FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA`=:schema AND `TABLE_NAME`=:table AND `COLUMN_NAME`=:column;';
             $bindings = [
-                ':table' => $table,
                 ':column' => $column,
-                ':schema' => $schema
+                ':schema' => $schema,
+                ':table' => $table,
             ];
         }
         try {
@@ -193,15 +189,15 @@ class Manage
         if (empty($schema)) {
             $query = 'SELECT `CONSTRAINT_NAME` FROM `information_schema`.`TABLE_CONSTRAINTS` WHERE `TABLE_NAME`=:table AND `CONSTRAINT_NAME`=:fk LIMIT 1;';
             $bindings = [
+                ':fk' => $fk,
                 ':table' => $table,
-                ':fk' => $fk
             ];
         } else {
             $query = 'SELECT `CONSTRAINT_NAME` FROM `information_schema`.`TABLE_CONSTRAINTS` WHERE `TABLE_SCHEMA`=:schema AND `TABLE_NAME`=:table AND `CONSTRAINT_NAME`=:fk;';
             $bindings = [
-                ':table' => $table,
                 ':fk' => $fk,
-                ':schema' => $schema
+                ':schema' => $schema,
+                ':table' => $table,
             ];
         }
         try {
@@ -343,7 +339,8 @@ class Manage
     public static function selectAllDependencies(string $schema, string $table): array
     {
         // We are using backticks when comparing the schemas and tables, since that will definitely avoid any matches due to dots in names
-        return Query::query(/** @lang SQL */ '
+        return Query::query(
+            /** @lang SQL */            '
                  WITH RECURSIVE `DependencyTree` AS (
                     SELECT
                         CONCAT(\'`\', `REFERENCED_TABLE_SCHEMA`, \'`.`\', `REFERENCED_TABLE_NAME`, \'`\') AS `dependency`
@@ -367,7 +364,8 @@ class Manage
                 )
                 SELECT DISTINCT `dependency`
                     FROM `DependencyTree`;',
-            [':schema' => $schema, ':table' => $table], return: 'column'
+            [':schema' => $schema, ':table' => $table],
+            return: 'column',
         );
     }
 
@@ -433,7 +431,8 @@ class Manage
     {
         // Get Foreign Key constraints for the table
 
-        $foreign_keys = Query::query('SELECT
+        $foreign_keys = Query::query(
+            'SELECT
                                                 `tc`.`CONSTRAINT_NAME` as `name`,
                                                 CONCAT(\'`\', `tc`.`TABLE_SCHEMA`, \'`.`\', `tc`.`TABLE_NAME`, \'`\') AS `child_table`,
                                                 `kcu`.`COLUMN_NAME` AS `child_column`,
@@ -455,7 +454,9 @@ class Manage
             (empty($table) ? '' : 'AND `tc`.`TABLE_NAME` = :table ').
             ($nullable_only ? ' AND `ref`.`DELETE_RULE`=\'SET NULL\' ' : '').
             'ORDER BY `tc`.`CONSTRAINT_NAME`, `kcu`.`ORDINAL_POSITION`;',
-            [':schema' => $schema, ':table' => $table], return: 'all');
+            [':schema' => $schema, ':table' => $table],
+            return: 'all',
+        );
         // Group by constraint to handle multi-column constraints
         $constraints = [];
         foreach ($foreign_keys as $constraint) {
@@ -464,7 +465,7 @@ class Manage
             $constraints[$constraint['name']]['on_delete'] = $constraint['on_delete'];
             $constraints[$constraint['name']]['columns'][] = [
                 'child' => $constraint['child_column'],
-                'parent' => $constraint['parent_column']
+                'parent' => $constraint['parent_column'],
             ];
         }
         foreach ($constraints as $name => &$fk) {
@@ -593,10 +594,11 @@ class Manage
                     WHERE `TABLE_SCHEMA` = :schema AND
                           `TABLE_NAME` = :table AND
                           `INDEX_NAME` = :index
-                    GROUP BY `TABLE_SCHEMA`, `TABLE_NAME`, `INDEX_NAME`, `INDEX_TYPE`, `NON_UNIQUE`, `INDEX_COMMENT`;'
+                    GROUP BY `TABLE_SCHEMA`, `TABLE_NAME`, `INDEX_NAME`, `INDEX_TYPE`, `NON_UNIQUE`, `INDEX_COMMENT`;',
             ],
             [':schema' => $schema, ':table' => $table, ':index' => $index],
-            return: 'value');
+            return: 'value',
+        );
         if (
             !\is_string($command)
             || empty($command)
