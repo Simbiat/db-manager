@@ -7,7 +7,7 @@ namespace Simbiat\Database;
 /**
  * Useful semantic wrappers to manage your database
  */
-class Manage
+final class Manage
 {
     /**
      * @var null|\PDO PDO object to run queries against
@@ -20,11 +20,11 @@ class Manage
     public function __construct(?\PDO $dbh = null)
     {
         if ($dbh === null) {
-            if (\method_exists(Pool::class, 'openConnection')) {
-                self::$dbh = Pool::openConnection();
-            } else {
+            if (!\method_exists(Pool::class, 'openConnection')) {
                 throw new \RuntimeException('Pool class not loaded and no PDO object provided.');
             }
+
+            self::$dbh = Pool::openConnection();
         } else {
             self::$dbh = $dbh;
             // Ensure Query has a PDF object in it
@@ -517,14 +517,10 @@ class Manage
         $violations = self::hasFKViolated($schema, $table, $nullable_only);
         // Go through results and fix violations if we can
         foreach ($violations as &$fk) {
-            if (
+            $fk['fixed'] = 
                 $fk['on_delete'] === 'SET NULL'
                 && !$force_delete
-            ) {
-                $fk['fixed'] = Query::query($fk['update'], return: 'affected');
-            } else {
-                $fk['fixed'] = Query::query($fk['delete'], return: 'affected');
-            }
+             ? Query::query($fk['update'], return: 'affected') : Query::query($fk['delete'], return: 'affected');
         }
         unset($fk);
 
