@@ -10,7 +10,7 @@ namespace Simbiat\Database;
 final class Manage
 {
     /**
-     * @var null|\PDO PDO object to run queries against
+     * @var \PDO|null PDO object to run queries against
      */
     private(set) static ?\PDO $dbh = null;
 
@@ -340,7 +340,8 @@ final class Manage
     {
         // We are using backticks when comparing the schemas and tables, since that will definitely avoid any matches due to dots in names
         return Query::query(
-            /** @lang SQL */            '
+        /** @lang SQL */
+            '
                  WITH RECURSIVE `DependencyTree` AS (
                     SELECT
                         CONCAT(\'`\', `REFERENCED_TABLE_SCHEMA`, \'`.`\', `REFERENCED_TABLE_NAME`, \'`\') AS `dependency`
@@ -430,7 +431,6 @@ final class Manage
     public static function hasFKViolated(?string $schema = null, ?string $table = null, bool $nullable_only = false): array
     {
         // Get Foreign Key constraints for the table
-
         $foreign_keys = Query::query(
             'SELECT
                                                 `tc`.`CONSTRAINT_NAME` as `name`,
@@ -448,12 +448,12 @@ final class Manage
                                                 ON `tc`.`CONSTRAINT_NAME` = `ref`.`CONSTRAINT_NAME`
                                                 AND `tc`.`TABLE_SCHEMA` = `ref`.`CONSTRAINT_SCHEMA`
                                             WHERE
-                                                `tc`.`CONSTRAINT_TYPE` = \'FOREIGN KEY\''.
+                                                `tc`.`CONSTRAINT_TYPE` = \'FOREIGN KEY\''
             // Space after named identifiers is important here, or the query can fail
-            (empty($schema) ? '' : 'AND `tc`.`TABLE_SCHEMA` = :schema ').
-            (empty($table) ? '' : 'AND `tc`.`TABLE_NAME` = :table ').
-            ($nullable_only ? ' AND `ref`.`DELETE_RULE`=\'SET NULL\' ' : '').
-            'ORDER BY `tc`.`CONSTRAINT_NAME`, `kcu`.`ORDINAL_POSITION`;',
+            .(empty($schema) ? '' : 'AND `tc`.`TABLE_SCHEMA` = :schema ')
+            .(empty($table) ? '' : 'AND `tc`.`TABLE_NAME` = :table ')
+            .($nullable_only ? ' AND `ref`.`DELETE_RULE`=\'SET NULL\' ' : '')
+            .'ORDER BY `tc`.`CONSTRAINT_NAME`, `kcu`.`ORDINAL_POSITION`;',
             [':schema' => $schema, ':table' => $table],
             return: 'all',
         );
@@ -484,10 +484,12 @@ final class Manage
             $on_clause = \implode(' AND ', $join_conditions);
             $where_clause = \implode(' OR ', $where_conditions);
             // Generate the query to get values of violating rows. Can be useful for further processing
-            $fk['select'] = /** @lang SQL */
+            /** @lang SQL */
+            $fk['select'] =
                 'SELECT '.$column_list.' FROM '.$fk['child_table'].' AS `child` LEFT JOIN '.$fk['parent_table'].' AS `parent` ON '.$on_clause.' WHERE ('.$where_clause.') AND `parent`.`'.$fk['columns'][0]['parent'].'` IS NULL;';
             // Generate the queries to fix the violations
-            $fk['update'] = /** @lang SQL */
+            /** @lang SQL */
+            $fk['update'] =
                 \preg_replace('/;\)$/u', ');', 'UPDATE '.$fk['child_table'].' SET '.\implode(', ', $for_update).' WHERE ('.\str_replace('`child`.', '', $column_list).') IN ('.$fk['select'].')');
             $fk['delete'] = \preg_replace('/;\)$/u', ');', 'DELETE FROM '.$fk['child_table'].' WHERE ('.\str_replace('`child`.', '', $column_list).') IN ('.$fk['select'].')');
             // Get the count of violating rows
@@ -517,10 +519,10 @@ final class Manage
         $violations = self::hasFKViolated($schema, $table, $nullable_only);
         // Go through results and fix violations if we can
         foreach ($violations as &$fk) {
-            $fk['fixed'] = 
+            $fk['fixed'] =
                 $fk['on_delete'] === 'SET NULL'
                 && !$force_delete
-             ? Query::query($fk['update'], return: 'affected') : Query::query($fk['delete'], return: 'affected');
+            ? Query::query($fk['update'], return: 'affected') : Query::query($fk['delete'], return: 'affected');
         }
         unset($fk);
 
