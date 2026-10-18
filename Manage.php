@@ -5,17 +5,17 @@ declare(strict_types=1);
 namespace Simbiat\Database;
 
 /**
- * Useful semantic wrappers to manage your database
+ * Useful semantic wrappers to manage your database.
  */
 final class Manage
 {
     /**
-     * @var \PDO|null PDO object to run queries against
+     * @var null|\PDO PDO object to run queries against
      */
-    private(set) static ?\PDO $dbh = null;
+    public private(set) static ?\PDO $dbh = null;
 
     /**
-     * @param \PDO|null $dbh PDO obj
+     * @param null|\PDO $dbh PDO obj
      */
     public function __construct(?\PDO $dbh = null)
     {
@@ -33,21 +33,20 @@ final class Manage
     }
 
     /**
-     * Check if table(s) exist(s)
+     * Check if table(s) exist(s).
      *
-     * @param string|array $table  Table name(s)
-     * @param string|array $schema Optional (but recommended) schema name(s)
+     * @param array|string $table  Table name(s)
+     * @param array|string $schema Optional (but recommended) schema name(s)
      *
      * @return int Number of table(s) found
      */
-    public static function checkTable(string|array $table, string|array $schema = ''): int
+    public static function checkTable(array|string $table, array|string $schema = ''): int
     {
         // Adjust the query depending on whether schema is set
         if (empty($schema)) {
             $query = 'SELECT COUNT(*) as `count` FROM `information_schema`.`TABLES` WHERE `TABLE_NAME` IN(:table);';
             $bindings = [
-                ':table' =>
-                    [
+                ':table' => [
                         $table,
                         \is_string($table) ? 'string' : 'in',
                         'string',
@@ -56,20 +55,19 @@ final class Manage
         } else {
             $query = 'SELECT COUNT(*) as `count` FROM `information_schema`.`TABLES` WHERE `TABLE_NAME` IN(:table) AND `TABLE_SCHEMA` IN(:schema);';
             $bindings = [
-                ':schema' =>
-                    [
+                ':schema' => [
                         $schema,
                         \is_string($schema) ? 'string' : 'in',
                         'string',
                     ],
-                ':table' =>
-                    [
+                ':table' => [
                         $table,
                         \is_string($table) ? 'string' : 'in',
                         'string',
                     ],
             ];
         }
+
         try {
             return Query::query($query, $bindings, return: 'count');
         } catch (\Throwable $e) {
@@ -78,7 +76,7 @@ final class Manage
     }
 
     /**
-     * Get column data type
+     * Get column data type.
      *
      * @param string $table  Table name
      * @param string $column Column name
@@ -102,6 +100,7 @@ final class Manage
                 ':table' => $table,
             ];
         }
+
         try {
             return Query::query($query, $bindings, return: 'value');
         } catch (\Throwable $e) {
@@ -110,7 +109,7 @@ final class Manage
     }
 
     /**
-     * Get column description
+     * Get column description.
      *
      * @param string $table  Table name
      * @param string $column Column name
@@ -134,6 +133,7 @@ final class Manage
                 ':table' => $table,
             ];
         }
+
         try {
             return Query::query($query, $bindings, return: 'value');
         } catch (\Throwable $e) {
@@ -142,7 +142,7 @@ final class Manage
     }
 
     /**
-     * Check if a column is nullable
+     * Check if a column is nullable.
      *
      * @param string $table  Table name
      * @param string $column Column name
@@ -166,6 +166,7 @@ final class Manage
                 ':table' => $table,
             ];
         }
+
         try {
             $result = Query::query($query, $bindings, return: 'value');
 
@@ -176,7 +177,7 @@ final class Manage
     }
 
     /**
-     * Check if Foreign Key name exists
+     * Check if Foreign Key name exists.
      *
      * @param string $table  Table name
      * @param string $fk     Foreign Key name
@@ -200,6 +201,7 @@ final class Manage
                 ':table' => $table,
             ];
         }
+
         try {
             return Query::query($query, $bindings, return: 'check');
         } catch (\Throwable $e) {
@@ -208,7 +210,7 @@ final class Manage
     }
 
     /**
-     * Check if a column exists in a table
+     * Check if a column exists in a table.
      *
      * @param string $table  Table name
      * @param string $column Column to check
@@ -226,6 +228,7 @@ final class Manage
             $query = 'SELECT `COLUMN_NAME` FROM `information_schema`.`COLUMNS` WHERE `TABLE_NAME` = :table AND `COLUMN_NAME` = :column AND `TABLE_SCHEMA` = :schema;';
             $bindings = [':table' => $table, ':column' => $column, ':schema' => $schema];
         }
+
         try {
             return Query::query($query, $bindings, return: 'check');
         } catch (\Throwable $e) {
@@ -235,7 +238,7 @@ final class Manage
 
     /**
      * Function to get a list of all tables for a schema in order, where first you have tables without dependencies (no foreign keys), and then tables that are dependent on tables that have come before. This is useful if you want to dump backups in a specific order so that you can then restore the data without disabling foreign keys.
-     * Only for MySQL/MariaDB
+     * Only for MySQL/MariaDB.
      *
      * @param string $schema  Optional name of the schema to limit to
      * @param bool   $by_size Order by table size to prioritize smaller tables
@@ -296,9 +299,9 @@ final class Manage
      * This will not return the specific FKs you need to deal with, but rather just a list of tables referencing tables that refer to the initial ones.
      * You will need to analyze the references yourself to "untangle" them properly.
      * You can pass a prepared list of tables with a format of ['schema' => 'schema_name', 'table' => 'table_name'] to limit tables that need to be checked.
-     * Only for MySQL/MariaDB
+     * Only for MySQL/MariaDB.
      *
-     * @param array|null $tables Optional list of tables in `schema.table` format. If none is provided, will first get a list of all tables available.
+     * @param null|array $tables Optional list of tables in `schema.table` format. If none is provided, will first get a list of all tables available.
      *
      * @return array
      */
@@ -329,7 +332,7 @@ final class Manage
 
     /**
      * Function to recursively get all dependencies (foreign keys) of a table.
-     * Only for MySQL/MariaDB
+     * Only for MySQL/MariaDB.
      *
      * @param string $schema Schema name
      * @param string $table  Table name
@@ -340,7 +343,7 @@ final class Manage
     {
         // We are using backticks when comparing the schemas and tables, since that will definitely avoid any matches due to dots in names
         return Query::query(
-        /** @lang SQL */
+            /* @lang SQL */
             '
                  WITH RECURSIVE `DependencyTree` AS (
                     SELECT
@@ -374,7 +377,7 @@ final class Manage
      * Function to restore `ROW_FORMAT` value to table definition.
      * MySQL/MariaDB may now have `ROW_FORMAT` in the `SHOW CREATE TABLE` output or have a value, which is different from the current one. This function amends that.
      * Due to `SHOW CREATE TABLE` being special, we can't use it as a sub-query, so need to do 2 queries instead.
-     * Only for MySQL/MariaDB
+     * Only for MySQL/MariaDB.
      *
      * @param string $schema       Schema name.
      * @param string $table        Table name.
@@ -382,7 +385,7 @@ final class Manage
      * @param bool   $if_not_exist Add the `IF NOT EXISTS` clause to the resulting definition.
      * @param bool   $add_use      Add the `USE` statement before the `CREATE` statement.
      *
-     * @return string|null
+     * @return null|string
      */
     public static function showCreateTable(string $schema, string $table, bool $no_increment = true, bool $if_not_exist = false, bool $add_use = false): ?string
     {
@@ -409,7 +412,7 @@ final class Manage
             $create = \preg_replace('/(\s* AUTO_INCREMENT=\d+)/ui', '', $create);
         }
         if ($if_not_exist) {
-            $create = \preg_replace('/^CREATE TABLE/ui', /** @lang text */ 'CREATE TABLE IF NOT EXISTS', $create);
+            $create = \preg_replace('/^CREATE TABLE/ui', /* @lang text */ 'CREATE TABLE IF NOT EXISTS', $create);
         }
         if ($add_use) {
             $create = 'USE `'.$schema.'`;'.\PHP_EOL.$create;
@@ -422,8 +425,8 @@ final class Manage
     /**
      * Check if there are any `FOREIGN KEY` constraint violations in the database. While `schema` and `table` are optional, it's recommended to pass them in case there are large tables in the database.
      *
-     * @param string|null $schema        Optional schema name.
-     * @param string|null $table         Optional table name.
+     * @param null|string $schema        Optional schema name.
+     * @param null|string $table         Optional table name.
      * @param bool        $nullable_only Whether to return only nullable constraints. Practically required only for `fixFKViolations` or similar automations.
      *
      * @return array
@@ -484,13 +487,13 @@ final class Manage
             $on_clause = \implode(' AND ', $join_conditions);
             $where_clause = \implode(' OR ', $where_conditions);
             // Generate the query to get values of violating rows. Can be useful for further processing
-            /** @lang SQL */
-            $fk['select'] =
-                'SELECT '.$column_list.' FROM '.$fk['child_table'].' AS `child` LEFT JOIN '.$fk['parent_table'].' AS `parent` ON '.$on_clause.' WHERE ('.$where_clause.') AND `parent`.`'.$fk['columns'][0]['parent'].'` IS NULL;';
+            /* @lang SQL */
+            $fk['select']
+                = 'SELECT '.$column_list.' FROM '.$fk['child_table'].' AS `child` LEFT JOIN '.$fk['parent_table'].' AS `parent` ON '.$on_clause.' WHERE ('.$where_clause.') AND `parent`.`'.$fk['columns'][0]['parent'].'` IS NULL;';
             // Generate the queries to fix the violations
-            /** @lang SQL */
-            $fk['update'] =
-                \preg_replace('/;\)$/u', ');', 'UPDATE '.$fk['child_table'].' SET '.\implode(', ', $for_update).' WHERE ('.\str_replace('`child`.', '', $column_list).') IN ('.$fk['select'].')');
+            /* @lang SQL */
+            $fk['update']
+                = \preg_replace('/;\)$/u', ');', 'UPDATE '.$fk['child_table'].' SET '.\implode(', ', $for_update).' WHERE ('.\str_replace('`child`.', '', $column_list).') IN ('.$fk['select'].')');
             $fk['delete'] = \preg_replace('/;\)$/u', ');', 'DELETE FROM '.$fk['child_table'].' WHERE ('.\str_replace('`child`.', '', $column_list).') IN ('.$fk['select'].')');
             // Get the count of violating rows
             $fk['count'] = Query::query('SELECT COUNT(*) AS `count` FROM '.$fk['child_table'].' AS `child` LEFT JOIN '.$fk['parent_table'].' AS `parent` ON '.$on_clause.' WHERE ('.$where_clause.') AND `parent`.`'.$fk['columns'][0]['parent'].'` IS NULL;', return: 'count');
@@ -506,8 +509,8 @@ final class Manage
     /**
      * Fix found constraints' violations. While `schema` and `table` are optional, it's recommended to pass them in case there are large tables in the database.
      *
-     * @param string|null $schema        Optional schema name.
-     * @param string|null $table         Optional table name.
+     * @param null|string $schema        Optional schema name.
+     * @param null|string $table         Optional table name.
      * @param bool        $nullable_only Whether to get only nullable constraints. If set to `false` entries that are not nullable will be **REMOVED** (`DELETE` will be used, so use with caution). If set to `true` (default), only nullable constraints will be picked up violations will be updated by settings the values to `NULL`.
      * @param bool        $force_delete  Whether to use `DELETE` even for nullable constraints. Use with caution.
      *
@@ -519,8 +522,8 @@ final class Manage
         $violations = self::hasFKViolated($schema, $table, $nullable_only);
         // Go through results and fix violations if we can
         foreach ($violations as &$fk) {
-            $fk['fixed'] =
-                $fk['on_delete'] === 'SET NULL'
+            $fk['fixed']
+                = $fk['on_delete'] === 'SET NULL'
                 && !$force_delete
             ? Query::query($fk['update'], return: 'affected') : Query::query($fk['delete'], return: 'affected');
         }
@@ -535,9 +538,9 @@ final class Manage
      * @param string $index  Index name
      * @param bool   $run    Whether to run the command. If `false` - will return the command itself if it was generated or `false` if not.
      *
-     * @return string|bool
+     * @return bool|string
      */
-    public static function rebuildIndexQuery(string $schema, string $table, string $index, bool $run = false): string|bool
+    public static function rebuildIndexQuery(string $schema, string $table, string $index, bool $run = false): bool|string
     {
         // Get the command to rebuild the index
         $command = Query::query(
