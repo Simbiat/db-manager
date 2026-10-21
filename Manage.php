@@ -47,24 +47,24 @@ final class Manage
             $query = 'SELECT COUNT(*) as `count` FROM `information_schema`.`TABLES` WHERE `TABLE_NAME` IN(:table);';
             $bindings = [
                 ':table' => [
-                        $table,
-                        \is_string($table) ? 'string' : 'in',
-                        'string',
-                    ],
+                    $table,
+                    \is_string($table) ? 'string' : 'in',
+                    'string',
+                ],
             ];
         } else {
             $query = 'SELECT COUNT(*) as `count` FROM `information_schema`.`TABLES` WHERE `TABLE_NAME` IN(:table) AND `TABLE_SCHEMA` IN(:schema);';
             $bindings = [
                 ':schema' => [
-                        $schema,
-                        \is_string($schema) ? 'string' : 'in',
-                        'string',
-                    ],
+                    $schema,
+                    \is_string($schema) ? 'string' : 'in',
+                    'string',
+                ],
                 ':table' => [
-                        $table,
-                        \is_string($table) ? 'string' : 'in',
-                        'string',
-                    ],
+                    $table,
+                    \is_string($table) ? 'string' : 'in',
+                    'string',
+                ],
             ];
         }
 
@@ -252,7 +252,7 @@ final class Manage
         // This is the list of the same tables, but where every element is a string of format `schema`.`table`. Used for array search only
         $tables_names_only = [];
         // Get all tables except standard system ones and also order them by size
-        $tables_raw = Query::query('SELECT `TABLE_SCHEMA` as `schema`, `TABLE_NAME` as `table`'.($by_size ? ', (DATA_LENGTH+INDEX_LENGTH) as `size`' : '').' FROM `INFORMATION_SCHEMA`.`TABLES` WHERE `TABLE_SCHEMA` NOT IN (\'information_schema\', \'performance_schema\', \'mysql\', \'sys\', \'test\')'.(empty($schema) ? '' : ' AND `TABLE_SCHEMA`=:schema').' ORDER BY '.($by_size ? '(DATA_LENGTH+INDEX_LENGTH), ' : '').'`TABLE_SCHEMA`, `TABLE_NAME`;', (empty($schema) ? [] : [':schema' => [$schema, 'string']]), return: 'all');
+        $tables_raw = Query::query('SELECT `TABLE_SCHEMA` as `schema`, `TABLE_NAME` as `table`'.($by_size ? ', (DATA_LENGTH+INDEX_LENGTH) as `size`' : '')." FROM `INFORMATION_SCHEMA`.`TABLES` WHERE `TABLE_SCHEMA` NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys', 'test')".(empty($schema) ? '' : ' AND `TABLE_SCHEMA`=:schema').' ORDER BY '.($by_size ? '(DATA_LENGTH+INDEX_LENGTH), ' : '').'`TABLE_SCHEMA`, `TABLE_NAME`;', (empty($schema) ? [] : [':schema' => [$schema, 'string']]), return: 'all');
         // Get dependencies for each table
         foreach ($tables_raw as $key => $table) {
             $table['dependencies'] = self::selectAllDependencies($table['schema'], $table['table']);
@@ -266,23 +266,27 @@ final class Manage
                 $tables_raw[$key] = $table;
             }
         }
+
         // Check if we have any cyclic references among the remaining tables
         if (!empty(self::checkCyclicForeignKeys($tables_raw))) {
             // Throw an error, because with cyclic references there is no way to determine the order at all
             throw new \PDOException('Cyclic foreign key references detected.');
         }
+
         // While is used because when we reach the end in first run, we may still have items left in the array
         while (!empty($tables_raw)) {
             foreach ($tables_raw as $key => $table) {
                 // Check if the table is already present in the ordered list
                 foreach ($table['dependencies'] as $d_key => $dependency) {
                     // If a dependency is not already present in the list of tables - go to the next table
-                    if (!\in_array($dependency, $tables_names_only, true)) {
+                    if (!\in_array($dependency, $tables_names_only, strict: true)) {
                         continue 2;
                     }
+
                     // Remove dependency
                     unset($tables_raw[$key]['dependencies'][$d_key]);
                 }
+
                 // If we are here, all dependencies are already in the list, so we can add the current table to the list, as well
                 $tables_ordered_full[] = $table;
                 $tables_names_only[] = '`'.$table['schema'].'`.`'.$table['table'].'`';
@@ -309,16 +313,14 @@ final class Manage
     {
         // Unfortunately, I was not able to make things work with just 1 query with a recursive sub-query, so doing things in 2 steps.
         // The first step is to get all tables that have FKs but exclude those that refer themselves
-        if ($tables === null) {
-            $tables = Query::query('SELECT `TABLE_SCHEMA` AS `schema`, `TABLE_NAME` AS `table` FROM `information_schema`.`KEY_COLUMN_USAGE` WHERE `REFERENCED_TABLE_SCHEMA` IS NOT NULL AND CONCAT(`REFERENCED_TABLE_SCHEMA`, \'.\', `REFERENCED_TABLE_NAME`) != CONCAT(`TABLE_SCHEMA`, \'.\', `TABLE_NAME`) GROUP BY `TABLE_SCHEMA`, `TABLE_NAME`;', return: 'all');
-        }
+        $tables ??= Query::query("SELECT `TABLE_SCHEMA` AS `schema`, `TABLE_NAME` AS `table` FROM `information_schema`.`KEY_COLUMN_USAGE` WHERE `REFERENCED_TABLE_SCHEMA` IS NOT NULL AND CONCAT(`REFERENCED_TABLE_SCHEMA`, '.', `REFERENCED_TABLE_NAME`) != CONCAT(`TABLE_SCHEMA`, '.', `TABLE_NAME`) GROUP BY `TABLE_SCHEMA`, `TABLE_NAME`;", return: 'all');
+
         foreach ($tables as $key => $table) {
             // For each table get their recursive list of dependencies, if not set in the prepared array
-            if (!isset($table['dependencies'])) {
-                $table['dependencies'] = self::selectAllDependencies($table['schema'], $table['table']);
-            }
+            $table['dependencies'] ??= self::selectAllDependencies($table['schema'], $table['table']);
+
             // Check if the dependency list has the table itself
-            if (\in_array('`'.$table['schema'].'`.`'.$table['table'].'`', $table['dependencies'], true)) {
+            if (\in_array('`'.$table['schema'].'`.`'.$table['table'].'`', $table['dependencies'], strict: true)) {
                 // Update the list (only really needed if we did not have a prepared list of tables from the start)
                 $tables[$key] = $table;
             } else {
@@ -395,6 +397,7 @@ final class Manage
         if (!\str_ends_with(';', $create)) {
             $create .= ';';
         }
+
         // Get current ROW_FORMAT value
         $row_format = Query::query('SELECT `ROW_FORMAT` FROM `information_schema`.`TABLES` WHERE `TABLE_SCHEMA`=:schema AND `TABLE_NAME`=:table;', [':schema' => $schema, ':table' => $table], return: 'value');
         // Check the value against create statement
@@ -408,14 +411,17 @@ final class Manage
                 $create = \preg_replace('/;$/u', ' ROW_FORMAT='.$row_format.';', $create);
             }
         }
+
         if ($no_increment) {
             $create = \preg_replace('/(\s* AUTO_INCREMENT=\d+)/ui', '', $create);
         }
+
         if ($if_not_exist) {
             $create = \preg_replace('/^CREATE TABLE/ui', /* @lang text */ 'CREATE TABLE IF NOT EXISTS', $create);
         }
+
         if ($add_use) {
-            $create = 'USE `'.$schema.'`;'.\PHP_EOL.$create;
+            return 'USE `'.$schema.'`;'.\PHP_EOL.$create;
         }
 
         // Return result
@@ -455,22 +461,23 @@ final class Manage
             // Space after named identifiers is important here, or the query can fail
             .(empty($schema) ? '' : 'AND `tc`.`TABLE_SCHEMA` = :schema ')
             .(empty($table) ? '' : 'AND `tc`.`TABLE_NAME` = :table ')
-            .($nullable_only ? ' AND `ref`.`DELETE_RULE`=\'SET NULL\' ' : '')
+            .($nullable_only ? " AND `ref`.`DELETE_RULE`='SET NULL' " : '')
             .'ORDER BY `tc`.`CONSTRAINT_NAME`, `kcu`.`ORDINAL_POSITION`;',
             [':schema' => $schema, ':table' => $table],
             return: 'all',
         );
         // Group by constraint to handle multi-column constraints
         $constraints = [];
-        foreach ($foreign_keys as $constraint) {
-            $constraints[$constraint['name']]['child_table'] = $constraint['child_table'];
-            $constraints[$constraint['name']]['parent_table'] = $constraint['parent_table'];
-            $constraints[$constraint['name']]['on_delete'] = $constraint['on_delete'];
-            $constraints[$constraint['name']]['columns'][] = [
-                'child' => $constraint['child_column'],
-                'parent' => $constraint['parent_column'],
+        foreach ($foreign_keys as $foreign_key) {
+            $constraints[$foreign_key['name']]['child_table'] = $foreign_key['child_table'];
+            $constraints[$foreign_key['name']]['parent_table'] = $foreign_key['parent_table'];
+            $constraints[$foreign_key['name']]['on_delete'] = $foreign_key['on_delete'];
+            $constraints[$foreign_key['name']]['columns'][] = [
+                'child' => $foreign_key['child_column'],
+                'parent' => $foreign_key['parent_column'],
             ];
         }
+
         foreach ($constraints as $name => &$fk) {
             // Build the column list, JOIN and WHERE conditions
             $children = [];
@@ -483,6 +490,7 @@ final class Manage
                 $where_conditions[] = '`child`.`'.$col['child'].'` IS NOT NULL';
                 $for_update[] = '`'.$col['child'].'`=NULL';
             }
+
             $column_list = \implode(', ', $children);
             $on_clause = \implode(' AND ', $join_conditions);
             $where_clause = \implode(' OR ', $where_conditions);
@@ -501,6 +509,7 @@ final class Manage
                 unset($constraints[$name]);
             }
         }
+
         unset($fk);
 
         return $constraints;
@@ -527,6 +536,7 @@ final class Manage
                 && !$force_delete
             ? Query::query($fk['update'], return: 'affected') : Query::query($fk['delete'], return: 'affected');
         }
+
         unset($fk);
 
         return $violations;
@@ -606,6 +616,7 @@ final class Manage
         ) {
             return false;
         }
+
         if ($run) {
             Query::query($command);
         }
